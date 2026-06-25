@@ -36,3 +36,8 @@ build/
 
 ### Mac OS ###
 .DS_Store
+# Node / Vue
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
