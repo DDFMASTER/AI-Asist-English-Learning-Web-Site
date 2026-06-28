@@ -14,4 +14,11 @@ public interface UserDAO {
     int updateLoginTime(Long userId, LocalDateTime time);
 
     int updateCheckin(Long userId, LocalDateTime time, int experience);
+
+    /**
+     * 更新用户总经验值（累加）
+     * @param userId 用户ID
+     * @param experience 新的总经验值
+     */
+    int updateExperience(Long userId, int experience);
 }

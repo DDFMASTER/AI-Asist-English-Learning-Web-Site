@@ -26,9 +26,10 @@ public class ArticleListServlet extends HttpServlet {
         json.append("{\"success\":true,\"articles\":[");
 
         try (Connection conn = DBUtil.getConnection()) {
-            String sql = "SELECT article_id, title, difficulty, article_like_count, " +
-                         "explanation_like_count, explanation_dislike_count, " +
-                         "vocquiz_num, comquiz_num " +
+            String sql = "SELECT article_id, title, source, difficulty, " +
+                         "article_like_count, explanation_like_count, " +
+                         "explanation_dislike_count, vocquiz_num, comquiz_num, " +
+                         "CHAR_LENGTH(content) AS content_length " +
                          "FROM article";
 
             if (difficulty != null && !difficulty.isBlank()) {
@@ -47,10 +48,17 @@ public class ArticleListServlet extends HttpServlet {
                         if (!first) json.append(",");
                         first = false;
 
+                        int contentLen = rs.getInt("content_length");
+                        int wordCount = Math.max(1, contentLen / 5);       // 英文平均 5 字符/词
+                        int readTime  = Math.max(1, wordCount / 200);      // 200 词/分钟
+
                         json.append("{");
                         json.append("\"articleId\":").append(rs.getLong("article_id")).append(",");
                         json.append("\"title\":\"").append(escapeJson(rs.getString("title"))).append("\",");
+                        json.append("\"source\":\"").append(escapeJson(rs.getString("source"))).append("\",");
                         json.append("\"difficulty\":\"").append(escapeJson(rs.getString("difficulty"))).append("\",");
+                        json.append("\"wordCount\":").append(wordCount).append(",");
+                        json.append("\"readTime\":").append(readTime).append(",");
                         json.append("\"articleLikeCount\":").append(rs.getInt("article_like_count")).append(",");
                         json.append("\"explanationLikeCount\":").append(rs.getInt("explanation_like_count")).append(",");
                         json.append("\"explanationDislikeCount\":").append(rs.getInt("explanation_dislike_count")).append(",");

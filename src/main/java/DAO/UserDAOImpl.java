@@ -116,6 +116,21 @@ public class UserDAOImpl implements UserDAO {
         }
     }
 
+    @Override
+    public int updateExperience(Long userId, int experience) {
+        String sql = "UPDATE user SET experience = ? WHERE user_id = ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, experience);
+            ps.setLong(2, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("更新用户经验值失败: userId=" + userId, e);
+        }
+    }
+
     private User mapRow(ResultSet rs) throws Exception {
         User user = new User();
         user.setUserId(rs.getLong("user_id"));

@@ -90,6 +90,25 @@ public class UserService {
     }
 
     /**
+     * 累加用户经验值（完成任务时调用）
+     * @param userId 用户ID
+     * @param xpToAdd 要添加的经验值
+     * @return 新的总经验值，-1 表示用户不存在，-2 表示已达每日上限
+     */
+    public int addExperience(Long userId, int xpToAdd) {
+        User user = userDAO.findById(userId);
+        if (user == null) {
+            return -1;
+        }
+
+        int currentXp = user.getExperience() != null ? user.getExperience() : 0;
+        int newXp = currentXp + xpToAdd;
+
+        userDAO.updateExperience(userId, newXp);
+        return newXp;
+    }
+
+    /**
      * 每日签到：返回获得的经验值，-1 表示今日已签到，-2 表示用户不存在
      */
     public int checkin(Long userId) {

@@ -68,6 +68,38 @@ public class WordService {
         return STAGE_EXPECTED_VOCAB.getOrDefault(stage, 0);
     }
 
+    /**
+     * 跨全部词库查词（用于阅读器中点击单词）。
+     * 遍历全部6个词库表，返回所有匹配结果按来源分组。
+     */
+    public WordLookupResult lookupWordInAllStages(String word) {
+        WordLookupResult result = new WordLookupResult();
+        result.word = word;
+
+        if (word == null || word.isBlank()) {
+            result.error = "参数无效";
+            return result;
+        }
+
+        // 跨全部词库查询
+        Map<String, List<WordBase>> allResults = wordDAO.findByWordInAllTables(word);
+        result.stageResults = allResults;
+
+        // 从第一个有结果的词库中提取音标
+        for (Map.Entry<String, List<WordBase>> entry : allResults.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                String ph = entry.getValue().get(0).getPhonetic();
+                if (ph != null && !ph.isBlank()) {
+                    result.phonetic = ph;
+                    break;
+                }
+            }
+        }
+
+        result.found = !allResults.isEmpty();
+        return result;
+    }
+
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
     }
@@ -128,6 +160,69 @@ public class WordService {
             }
 
             sb.append("}");
+            return sb.toString();
+        }
+
+        private String escape(String s) {
+            if (s == null) return "";
+            return s.replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t");
+        }
+    }
+
+    /** 全词库查词结果封装（用于阅读器点击查词） */
+    public static class WordLookupResult {
+        public String word;
+        public String phonetic;
+        public Map<String, List<WordBase>> stageResults;
+        public boolean found;
+        public String error;
+
+        public String toJson() {
+            if (error != null) {
+                return "{\"success\":false,\"message\":\"" + escape(error) + "\"}";
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\"success\":true");
+            sb.append(",\"word\":\"").append(escape(word)).append("\"");
+
+            if (phonetic != null && !phonetic.isBlank()) {
+                sb.append(",\"phonetic\":\"").append(escape(phonetic)).append("\"");
+            }
+
+            sb.append(",\"found\":").append(found);
+            sb.append(",\"results\":[");
+
+            boolean firstStage = true;
+            if (stageResults != null) {
+                for (Map.Entry<String, List<WordBase>> stageEntry : stageResults.entrySet()) {
+                    if (!firstStage) sb.append(",");
+                    firstStage = false;
+
+                    sb.append("{\"source\":\"").append(escape(stageEntry.getKey())).append("\",");
+                    sb.append("\"entries\":[");
+
+                    List<WordBase> entries = stageEntry.getValue();
+                    for (int i = 0; i < entries.size(); i++) {
+                        if (i > 0) sb.append(",");
+                        WordBase w = entries.get(i);
+                        sb.append("{");
+                        sb.append("\"id\":").append(w.getId()).append(",");
+                        sb.append("\"word\":\"").append(escape(w.getWord())).append("\",");
+                        sb.append("\"phonetic\":\"").append(escape(w.getPhonetic())).append("\",");
+                        sb.append("\"translation\":\"").append(escape(w.getTranslation())).append("\"");
+                        sb.append("}");
+                    }
+
+                    sb.append("]}");
+                }
+            }
+
+            sb.append("]}");
             return sb.toString();
         }
 

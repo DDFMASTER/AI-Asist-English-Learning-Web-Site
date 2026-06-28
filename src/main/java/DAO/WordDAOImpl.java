@@ -9,20 +9,22 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 public class WordDAOImpl implements WordDAO {
 
     /** 学习阶段 → 数据库表名的白名单映射，防止 SQL 注入 */
-    private static final Map<String, String> STAGE_TABLE = Map.of(
-            "初中", "junior",
-            "高中", "senior",
-            "四级", "cet_4",
-            "六级", "cet_6",
-            "考研", "graduate",
-            "托福", "toefl"
-    );
+    private static final Map<String, String> STAGE_TABLE = new LinkedHashMap<>();
+    static {
+        STAGE_TABLE.put("初中", "junior");
+        STAGE_TABLE.put("高中", "senior");
+        STAGE_TABLE.put("四级", "cet_4");
+        STAGE_TABLE.put("六级", "cet_6");
+        STAGE_TABLE.put("考研", "graduate");
+        STAGE_TABLE.put("托福", "toefl");
+    }
 
     @Override
     public List<WordBase> findByWordAndStage(String word, String stage) {
@@ -55,6 +57,46 @@ public class WordDAOImpl implements WordDAO {
             throw new RuntimeException("查词失败: word=" + word + ", stage=" + stage, e);
         }
         return results;
+    }
+
+    @Override
+    public Map<String, List<WordBase>> findByWordInAllTables(String word) {
+        Map<String, List<WordBase>> result = new LinkedHashMap<>();
+
+        for (Map.Entry<String, String> entry : STAGE_TABLE.entrySet()) {
+            String stageLabel = entry.getKey();
+            String tableName = entry.getValue();
+
+            // 表名来自白名单，安全拼接
+            String sql = "SELECT id, word, phonetic, translation FROM " + tableName
+                       + " WHERE word = ?";
+
+            List<WordBase> entries = new ArrayList<>();
+
+            try (Connection conn = DBUtil.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+
+                ps.setString(1, word);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        WordBase wb = new WordBase();
+                        wb.setId(rs.getLong("id"));
+                        wb.setWord(rs.getString("word"));
+                        wb.setPhonetic(rs.getString("phonetic"));
+                        wb.setTranslation(rs.getString("translation"));
+                        entries.add(wb);
+                    }
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("查词失败: word=" + word + ", table=" + tableName, e);
+            }
+
+            if (!entries.isEmpty()) {
+                result.put(stageLabel, entries);
+            }
+        }
+
+        return result;
     }
 
     @Override

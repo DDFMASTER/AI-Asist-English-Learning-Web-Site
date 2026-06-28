@@ -15,6 +15,13 @@ public interface WordDAO {
     List<WordBase> findByWordAndStage(String word, String stage);
 
     /**
+     * 跨全部词库查词（初中/高中/四级/六级/考研/托福）。
+     * @param word 单词
+     * @return 词库中文标签 → 该词库中匹配的释义列表，仅包含有结果的词库
+     */
+    java.util.Map<String, java.util.List<WordBase>> findByWordInAllTables(String word);
+
+    /**
      * 从 AI 动态词典查询单词最新的未删除解释
      */
     AiWordDic findLatestAiDic(String word);
