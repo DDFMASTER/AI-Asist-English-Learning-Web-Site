@@ -315,8 +315,8 @@ function handleWordClick(wordData, event) {
     left = Math.min((articleRect?.right || window.innerWidth) + gap, window.innerWidth - popoverWidth - 10)
   }
 
-  // 垂直位置：固定距页面顶端 30px
-  const top = 30
+  // 垂直位置：固定距页面顶端 140px
+  const top = 140
 
   // 立即显示弹窗（加载状态）
   wordPopover.word = { word: wordData.word, results: [] }
@@ -371,8 +371,8 @@ function handleCultureClick(data, event) {
     left = Math.min((articleRect?.right || window.innerWidth) + gap, window.innerWidth - popoverWidth - 10)
   }
 
-  // 垂直位置：固定距页面顶端 30px
-  const top = 50
+  // 垂直位置：固定距页面顶端 140px
+  const top = 140
 
   culturePopover.title = data.title
   culturePopover.content = data.content

@@ -1,0 +1,1 @@
+import{r as e}from"./index-eoNTiIQi.js";function t(){let t=e();function n(e){return(...n)=>{if(!t.isLoggedIn){t.openLoginModal();return}return e(...n)}}return{guard:n,isLoggedIn:t.isLoggedIn}}export{t};

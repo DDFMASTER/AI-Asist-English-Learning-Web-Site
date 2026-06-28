@@ -149,11 +149,37 @@
         </div>
       </div>
     </div>
+
+    <!-- 退出登录确认浮窗 -->
+    <Teleport to="body">
+      <div
+        v-if="showLogoutConfirm"
+        class="fixed z-[200] glass-popover p-5 w-72"
+        :style="{ left: logoutPopoverPos.x + 'px', top: logoutPopoverPos.y + 'px' }"
+        @click.stop
+      >
+        <p class="text-sm font-medium text-gray-700 mb-4">确定要退出当前账号吗？</p>
+        <div class="flex gap-2">
+          <button
+            class="flex-1 h-9 border border-gray-200 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-50 transition-all"
+            @click="cancelLogout"
+          >
+            取消
+          </button>
+          <button
+            class="flex-1 h-9 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-all"
+            @click="confirmLogout"
+          >
+            退出
+          </button>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as echarts from 'echarts'
@@ -240,11 +266,27 @@ function editDifficulty() {
   // TODO: 调用后端 API 保存
 }
 
-function handleLogout() {
-  if (confirm('确定退出登录吗？')) {
-    userStore.logout()
-    router.push('/login')
-  }
+const showLogoutConfirm = ref(false)
+const logoutPopoverPos = reactive({ x: 0, y: 0 })
+
+function handleLogout(e) {
+  e.stopPropagation()
+  // 计算弹窗位置：水平居中，垂直在点击位置附近
+  const popoverWidth = 288 // w-72 = 288px
+  const x = Math.max(10, (window.innerWidth - popoverWidth) / 2)
+  const y = Math.max(10, e.clientY - 80)
+  logoutPopoverPos.x = x
+  logoutPopoverPos.y = y
+  showLogoutConfirm.value = true
+}
+
+function confirmLogout() {
+  userStore.logout()
+  router.push('/login')
+}
+
+function cancelLogout() {
+  showLogoutConfirm.value = false
 }
 
 // ========== ECharts 趋势图 ==========
@@ -288,13 +330,19 @@ function handleResize() {
   if (trendChart) trendChart.resize()
 }
 
+function handleGlobalClick() {
+  showLogoutConfirm.value = false
+}
+
 onMounted(async () => {
   await nextTick()
   initTrendChart()
+  document.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  document.removeEventListener('click', handleGlobalClick)
   if (trendChart) {
     trendChart.dispose()
     trendChart = null
