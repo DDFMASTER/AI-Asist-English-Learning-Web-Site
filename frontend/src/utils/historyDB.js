@@ -5,12 +5,12 @@
  * └─ browseHistory (key: articleId)
  *      { articleId, title, visitedAt }
  *
- * 仅保留最近访问的 3 篇文章。
+ * 保留最近访问的 50 篇文章。
  */
 
 const DB_NAME = 'AAEL_HistoryDB'
 const DB_VERSION = 1
-const MAX_HISTORY = 3
+const MAX_HISTORY = 50
 
 /**
  * 打开/初始化数据库
@@ -93,6 +93,22 @@ function trimHistory(db) {
 
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error)
+  })
+}
+
+/**
+ * 获取浏览历史总数
+ * @returns {Promise<number>}
+ */
+export async function countHistory() {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('browseHistory', 'readonly')
+    const store = tx.objectStore('browseHistory')
+    const req = store.count()
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+    tx.oncomplete = () => db.close()
   })
 }
 

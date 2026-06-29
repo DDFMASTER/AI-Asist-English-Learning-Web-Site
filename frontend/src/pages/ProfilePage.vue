@@ -29,55 +29,77 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 抽屉式便签栏 -->
+    <div class="drawer-tabs flex items-center gap-2 mb-0 flex-wrap">
       <button
-        class="px-6 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all flex-none"
-        @click="guard(() => { showEditProfile = true })"
+        v-for="tab in drawerTabs"
+        :key="tab.key"
+        class="drawer-tab-label"
+        :class="{ active: activeDrawer === tab.key }"
+        @click="toggleDrawer(tab.key)"
       >
-        编辑资料
+        <span class="text-lg">{{ tab.emoji }}</span>
+        <span class="text-sm font-bold">{{ tab.label }}</span>
+        <Icon
+          :icon="activeDrawer === tab.key ? 'ph:caret-up-bold' : 'ph:caret-down-bold'"
+          class="text-xs transition-transform duration-300"
+        />
       </button>
     </div>
 
-    <!-- 主体：两栏布局 -->
-    <div class="grid grid-cols-12 gap-8">
-      <!-- 左侧 55% -->
-      <div class="col-span-7 flex flex-col gap-8">
+    <!-- 抽屉内容区域 -->
+    <div class="drawer-content-wrapper">
+      <Transition name="drawer">
         <!-- 学习趋势 -->
-        <div class="card">
-          <h3 class="text-lg font-bold mb-6">📊 学习趋势</h3>
+        <div v-if="activeDrawer === 'trend'" key="trend" class="card drawer-card">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-bold">📊 每日在线时长</h3>
+            <div class="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl">
+              <span class="text-xs text-indigo-400">今日在线</span>
+              <span class="text-lg font-bold text-indigo-600">{{ todayOnlineMinutes }}<span class="text-xs font-normal text-indigo-400"> 分钟</span></span>
+            </div>
+          </div>
           <div ref="trendChartRef" class="w-full h-72"></div>
         </div>
 
         <!-- 学习记录 -->
-        <div class="card">
+        <div v-else-if="activeDrawer === 'records'" key="records" class="card drawer-card">
           <h3 class="text-lg font-bold mb-6">📖 学习记录</h3>
-          <div class="space-y-4 max-h-96 overflow-y-auto">
+          <div v-if="historyRecords.length === 0" class="text-center py-12 text-gray-400">
+            <Icon icon="ph:book-open-bold" class="text-3xl mx-auto mb-3 opacity-30" />
+            <p class="text-sm">暂无阅读记录</p>
+            <router-link to="/materials" class="text-xs text-[#2563EB] hover:underline mt-1 inline-block">
+              去发现一些文章吧 →
+            </router-link>
+          </div>
+          <div v-else class="space-y-4 max-h-96 overflow-y-auto">
             <div
-              v-for="record in learningRecords"
-              :key="record.id"
-              class="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
+              v-for="record in historyRecords"
+              :key="record.articleId"
+              class="flex items-center justify-between p-4 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:shadow-sm transition-all group"
+              @click="goToReader(record.articleId)"
             >
               <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-none" :class="record.bgClass">
-                  <Icon :icon="record.icon" class="text-xl" :class="record.iconColor" />
+                <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-none group-hover:bg-blue-100 transition-colors">
+                  <Icon icon="ph:book-open-bold" class="text-xl text-[#2563EB]" />
                 </div>
                 <div>
-                  <div class="text-sm font-bold">{{ record.title }}</div>
-                  <div class="text-[10px] text-gray-400 mt-0.5">{{ record.time }}</div>
+                  <div class="text-sm font-bold group-hover:text-[#2563EB] transition-colors">{{ record.title }}</div>
+                  <div class="text-[10px] text-gray-400 mt-0.5">{{ record.timeAgo }}</div>
                 </div>
               </div>
-              <div class="text-right">
-                <div class="text-xs font-bold text-[#10B981]">+{{ record.xp }} XP</div>
-                <div class="text-[10px] text-gray-400">{{ record.duration }}</div>
+              <div class="text-right flex items-center gap-2">
+                <span class="text-[10px] text-gray-300">阅读</span>
+                <Icon icon="ph:arrow-right-bold" class="text-gray-300 group-hover:text-[#2563EB] group-hover:translate-x-0.5 transition-all text-sm" />
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- 右侧 45% -->
-      <div class="col-span-5 flex flex-col gap-8">
         <!-- 勋章墙 -->
-        <div class="card">
+        <div v-else-if="activeDrawer === 'badges'" key="badges" class="card drawer-card">
           <h3 class="text-lg font-bold mb-6">🏆 勋章墙</h3>
           <div class="grid grid-cols-3 gap-4">
             <div
@@ -100,21 +122,31 @@
         </div>
 
         <!-- 设置 -->
-        <div class="card">
+        <div v-else-if="activeDrawer === 'settings'" key="settings" class="card drawer-card">
           <h3 class="text-lg font-bold mb-6">⚙️ 设置</h3>
           <div class="space-y-1">
-            <!-- 每日学习提醒 -->
-            <div class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors">
-              <span class="text-sm font-medium text-gray-700">每日学习提醒</span>
-              <ToggleSwitch v-model="reminderEnabled" @change="onReminderChange" />
-            </div>
             <!-- 学习目标时长 -->
             <div
-              class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer"
-              @click="guard(editStudyTarget)"
+              class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors"
+              :class="{ 'cursor-pointer': !editingTarget }"
+              @click="editingTarget || startEditTarget()"
             >
               <span class="text-sm font-medium text-gray-700">学习目标时长</span>
-              <span class="text-sm text-gray-400">{{ studyTarget }} 分钟/天</span>
+              <span v-if="!editingTarget" class="text-sm text-gray-400">{{ studyTarget }} 分钟/天</span>
+              <div v-else class="flex items-center gap-2" @click.stop>
+                <input
+                  ref="targetInputRef"
+                  v-model.number="targetDraft"
+                  type="number"
+                  min="1"
+                  max="480"
+                  class="w-16 h-8 text-sm text-center border border-[#2563EB] rounded-lg focus:outline-none"
+                  @keydown.enter="saveTarget"
+                  @keydown.escape="editingTarget = false"
+                  @blur="saveTarget"
+                />
+                <span class="text-xs text-gray-400">分钟/天</span>
+              </div>
             </div>
             <!-- 难度偏好 -->
             <div
@@ -124,19 +156,14 @@
               <span class="text-sm font-medium text-gray-700">难度偏好</span>
               <span class="text-sm text-gray-400">{{ difficultyPreference }}</span>
             </div>
-            <!-- 通知设置 -->
-            <div class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors">
-              <span class="text-sm font-medium text-gray-700">通知设置</span>
-              <ToggleSwitch v-model="notificationEnabled" @change="onNotificationChange" />
-            </div>
             <!-- 关于我们 -->
-            <router-link
-              to="/about"
-              class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors no-underline"
+            <div
+              class="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer"
+              @click="openAbout"
             >
               <span class="text-sm font-medium text-gray-700">关于我们</span>
               <Icon icon="ph:caret-right-bold" class="text-gray-300 text-lg" />
-            </router-link>
+            </div>
             <!-- 退出登录 -->
             <div
               class="flex items-center justify-between p-4 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
@@ -147,8 +174,21 @@
             </div>
           </div>
         </div>
-      </div>
+      </Transition>
     </div>
+
+    <!-- 关于我们弹窗 -->
+    <Teleport to="body">
+      <div
+        v-if="showAboutModal"
+        class="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+        @click.self="showAboutModal = false"
+      >
+        <div class="relative bg-white rounded-2xl shadow-2xl overflow-hidden" style="width:192px;height:108px">
+          <img src="/gggg.png" alt="关于我们" class="w-full h-full object-contain" />
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 退出登录确认浮窗 -->
     <Teleport to="body">
@@ -179,13 +219,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
-import ToggleSwitch from '@/components/ToggleSwitch.vue'
 import { useRequireAuth } from '@/composables/useAuth'
+import { getRecentOnlineTime, getTodayMinutes, getDailyTarget, setDailyTarget, getStreak } from '@/utils/onlineTimeDB'
+import { getRecentHistory, countHistory } from '@/utils/historyDB'
+import aboutAudioSrc from '@/ggg/gggg.mp3'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -196,33 +238,32 @@ const showEditProfile = ref(false)
 const username = computed(() => userStore.user?.username || 'Alex')
 const userLevel = computed(() => userStore.user?.study_purpose || 'B1 · 中级')
 const avatarLetter = computed(() => username.value.charAt(0).toUpperCase())
-const streak = ref(12)
-const totalRead = ref(23)
-const totalXp = ref(1580)
+const streak = ref(0)
+const totalRead = ref(0)
+const totalXp = computed(() => userStore.user?.experience || 0)
 
-// ========== 学习记录 ==========
-const learningRecords = ref([
-  {
-    id: 1, title: '阅读：The Future of AI', time: '今天 09:30', xp: 50, duration: '15 min',
-    icon: 'ph:book-open-bold', iconColor: 'text-[#2563EB]', bgClass: 'bg-blue-50',
-  },
-  {
-    id: 2, title: '学习 5 个新词', time: '今天 09:15', xp: 30, duration: '10 min',
-    icon: 'ph:translate-bold', iconColor: 'text-[#F59E0B]', bgClass: 'bg-yellow-50',
-  },
-  {
-    id: 3, title: '复习 10 个旧词', time: '今天 08:50', xp: 30, duration: '10 min',
-    icon: 'ph:repeat-bold', iconColor: 'text-[#10B981]', bgClass: 'bg-green-50',
-  },
-  {
-    id: 4, title: '完成 B1 能力测评', time: '昨天 14:20', xp: 100, duration: '25 min',
-    icon: 'ph:clipboard-text-bold', iconColor: 'text-purple-500', bgClass: 'bg-purple-50',
-  },
-  {
-    id: 5, title: '口语练习 5 分钟', time: '昨天 13:40', xp: 20, duration: '5 min',
-    icon: 'ph:headset-bold', iconColor: 'text-orange-500', bgClass: 'bg-orange-50',
-  },
-])
+// ========== 学习记录（浏览历史）==========
+const historyRecords = ref([])
+
+async function loadHistoryRecords() {
+  try {
+    const { getRecentHistory, relativeTime } = await import('@/utils/historyDB')
+    const records = await getRecentHistory(50)
+    historyRecords.value = records.map((r) => ({
+      articleId: r.articleId,
+      title: r.title || 'Untitled',
+      timeAgo: relativeTime(r.visitedAt),
+    }))
+  } catch (e) {
+    console.error('加载浏览历史失败:', e)
+    historyRecords.value = []
+  }
+}
+
+function goToReader(articleId) {
+  if (!articleId) return
+  router.push(`/reader?id=${articleId}`)
+}
 
 // ========== 勋章 ==========
 const badges = ref([
@@ -234,27 +275,46 @@ const badges = ref([
   { name: '全能学者', emoji: '🎓', unlocked: false },
 ])
 
-// ========== 设置 ==========
-const reminderEnabled = ref(true)
-const notificationEnabled = ref(false)
-const studyTarget = ref(30)
+// ========== 抽屉便签 ==========
+const drawerTabs = [
+  { key: 'trend', label: '学习趋势', emoji: '📊' },
+  { key: 'records', label: '学习记录', emoji: '📖' },
+  { key: 'badges', label: '勋章墙', emoji: '🏆' },
+  { key: 'settings', label: '设置', emoji: '⚙️' },
+]
+const activeDrawer = ref('trend')
+
+function toggleDrawer(key) {
+  // 点击已打开的便签 → 关闭；点击其他便签 → 切换
+  activeDrawer.value = activeDrawer.value === key ? null : key
+}
+
+const studyTarget = ref(getDailyTarget())
 const difficultyPreference = ref('自适应')
 
-function onReminderChange(val) {
-  // TODO: 调用后端 API 保存设置
-  console.log('每日学习提醒:', val)
+// 学习目标行内编辑
+const editingTarget = ref(false)
+const targetDraft = ref(studyTarget.value)
+const targetInputRef = ref(null)
+
+function startEditTarget() {
+  targetDraft.value = studyTarget.value
+  editingTarget.value = true
+  nextTick(() => {
+    if (targetInputRef.value) {
+      targetInputRef.value.focus()
+      targetInputRef.value.select()
+    }
+  })
 }
 
-function onNotificationChange(val) {
-  // TODO: 调用后端 API 保存设置
-  console.log('通知设置:', val)
-}
-
-function editStudyTarget() {
-  const val = prompt('设置每日学习时长（分钟）：', studyTarget.value)
-  if (val && !isNaN(val) && Number(val) > 0) {
-    studyTarget.value = Number(val)
-    // TODO: 调用后端 API 保存
+function saveTarget() {
+  editingTarget.value = false
+  const val = targetDraft.value
+  if (!isNaN(val) && val > 0) {
+    studyTarget.value = val
+    setDailyTarget(val)
+    updateChartTargetLine()
   }
 }
 
@@ -264,6 +324,14 @@ function editDifficulty() {
   const next = (current + 1) % options.length
   difficultyPreference.value = options[next]
   // TODO: 调用后端 API 保存
+}
+
+const showAboutModal = ref(false)
+
+function openAbout() {
+  showAboutModal.value = true
+  const audio = new Audio(aboutAudioSrc)
+  audio.play().catch((e) => console.error('播放失败:', e.message))
 }
 
 const showLogoutConfirm = ref(false)
@@ -289,41 +357,107 @@ function cancelLogout() {
   showLogoutConfirm.value = false
 }
 
-// ========== ECharts 趋势图 ==========
+// ========== ECharts 趋势图（每日在线时长）==========
 const trendChartRef = ref(null)
 let trendChart = null
+const todayOnlineMinutes = ref(0)
 
-function initTrendChart() {
+async function initTrendChart() {
   if (!trendChartRef.value) return
   trendChart = echarts.init(trendChartRef.value)
+
+  // 从 IndexedDB 读取最近 14 天的在线时长
+  const records = await getRecentOnlineTime(14)
+
+  // 格式化日期为短格式 (MM/DD)
+  const dates = records.map((r) => {
+    const parts = r.date.split('-')
+    return `${parseInt(parts[1])}/${parseInt(parts[2])}`
+  })
+  const data = records.map((r) => r.minutes)
+  const todayIdx = data.length - 1
+
+  // 更新今日在线时长显示
+  todayOnlineMinutes.value = data[todayIdx]
+
   const option = {
-    grid: { top: 10, bottom: 30, left: 40, right: 10 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#fff',
+      borderColor: '#E5E7EB',
+      borderWidth: 1,
+      textStyle: { color: '#1F2937', fontSize: 12 },
+      formatter: function (params) {
+        const val = params[0].value
+        const h = Math.floor(val / 60)
+        const m = Math.round(val % 60)
+        if (h > 0) {
+          return `${params[0].axisValue}<br/><b>${h} 小时 ${m} 分钟</b>`
+        }
+        return `${params[0].axisValue}<br/><b>${m} 分钟</b>`
+      },
+    },
+    grid: { top: 20, bottom: 30, left: 45, right: 15 },
     xAxis: {
       type: 'category',
-      data: ['6/1', '6/3', '6/5', '6/7', '6/9', '6/11', '6/13', '6/15', '6/17', '6/19', '6/21', '6/23', '6/25'],
+      data: dates,
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: '#9CA3AF', fontSize: 10 },
     },
     yAxis: {
       type: 'value',
+      name: '分钟',
+      nameTextStyle: { color: '#9CA3AF', fontSize: 10 },
       splitLine: { lineStyle: { type: 'dashed', color: '#F3F4F6' } },
       axisLabel: { color: '#9CA3AF', fontSize: 10 },
     },
-    series: [{
-      data: [20, 35, 0, 45, 50, 30, 60, 40, 55, 25, 70, 45, 35],
-      type: 'bar',
-      barWidth: '10px',
-      itemStyle: {
-        borderRadius: [4, 4, 0, 0],
-        color: function (params) {
-          return params.dataIndex === 12 ? '#2563EB' : '#DBEAFE'
+    series: [
+      {
+        name: '在线时长',
+        data: data,
+        type: 'bar',
+        barWidth: '12px',
+        itemStyle: {
+          borderRadius: [4, 4, 0, 0],
+          color: function (params) {
+            if (params.dataIndex === todayIdx) {
+              return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                { offset: 0, color: '#6366F1' },
+                { offset: 1, color: '#2563EB' },
+              ])
+            }
+            return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: '#A5B4FC' },
+              { offset: 1, color: '#93C5FD' },
+            ])
+          },
         },
       },
-    }],
+      {
+        name: '每日目标',
+        type: 'line',
+        data: Array(dates.length).fill(studyTarget.value),
+        symbol: 'none',
+        lineStyle: { color: '#F59E0B', type: 'dashed', width: 1.5 },
+        itemStyle: { color: '#F59E0B' },
+        silent: true,
+      },
+    ],
   }
   trendChart.setOption(option)
   window.addEventListener('resize', handleResize)
+}
+
+function updateChartTargetLine() {
+  if (!trendChart) return
+  const target = studyTarget.value
+  trendChart.setOption({
+    series: [
+      {},
+      { data: Array(14).fill(target) },
+    ],
+  })
 }
 
 function handleResize() {
@@ -334,18 +468,155 @@ function handleGlobalClick() {
   showLogoutConfirm.value = false
 }
 
+async function loadUserStats() {
+  try {
+    const [s, count] = await Promise.all([
+      getStreak(),
+      countHistory(),
+    ])
+    streak.value = s
+    totalRead.value = count
+  } catch (e) {
+    console.error('加载用户统计失败:', e)
+  }
+}
+
 onMounted(async () => {
   await nextTick()
-  initTrendChart()
+  userStore.fetchProfile()        // 刷新后端 XP
+  loadUserStats()                 // 刷新本地统计
+  if (activeDrawer.value === 'trend') {
+    initTrendChart()
+  }
   document.addEventListener('click', handleGlobalClick)
+})
+
+// 离开趋势抽屉时销毁图表实例，保证下次进入时重新绑定新 DOM
+function disposeChart() {
+  if (trendChart) {
+    trendChart.dispose()
+    trendChart = null
+  }
+}
+
+// 监听抽屉切换
+watch(activeDrawer, async (val, oldVal) => {
+  // 离开趋势抽屉 → 销毁图表
+  if (oldVal === 'trend') {
+    disposeChart()
+  }
+  // 进入趋势抽屉 → 重新初始化图表
+  if (val === 'trend') {
+    await nextTick()
+    try {
+      const mins = await getTodayMinutes()
+      todayOnlineMinutes.value = mins
+    } catch (_) { /* ignore */ }
+    initTrendChart()
+  }
+  // 进入学习记录抽屉 → 刷新浏览历史
+  if (val === 'records') {
+    loadHistoryRecords()
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('click', handleGlobalClick)
-  if (trendChart) {
-    trendChart.dispose()
-    trendChart = null
-  }
+  disposeChart()
 })
 </script>
+
+<style scoped>
+/* ========== 抽屉便签样式 ========== */
+.drawer-tabs {
+  position: relative;
+  z-index: 10;
+}
+
+.drawer-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #F3F4F6;
+  color: #6B7280;
+  border: none;
+  border-radius: 12px 12px 0 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+  position: relative;
+}
+
+.drawer-tab-label:hover {
+  background: #E5E7EB;
+  color: #374151;
+}
+
+.drawer-tab-label.active {
+  background: white;
+  color: #2563EB;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.drawer-tab-label.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #2563EB;
+  border-radius: 3px 3px 0 0;
+}
+
+.drawer-content-wrapper {
+  position: relative;
+  min-height: 100px;
+}
+
+.drawer-card {
+  border-radius: 0 16px 16px 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ========== 抽屉切换动画 ========== */
+.drawer-enter-active {
+  animation: drawer-slide-in 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.drawer-leave-active {
+  animation: drawer-slide-out 0.35s cubic-bezier(0.55, 0.06, 0.68, 0.19);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+@keyframes drawer-slide-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  60% {
+    opacity: 0.85;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drawer-slide-out {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+}
+</style>

@@ -11,23 +11,44 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import AppNav from '@/components/AppNav.vue'
 import LoginModal from '@/components/LoginModal.vue'
 import { useUserStore } from '@/stores/user'
+import { startOnlineTimer, pauseTimer, resumeTimer } from '@/composables/useOnlineTimer'
 
 const userStore = useUserStore()
 
 function onLoginSuccess() {
-  // 登录成功后的回调
   userStore.fetchProfile()
 }
 
+function onVisibilityChange() {
+  if (document.hidden) {
+    pauseTimer()
+  } else {
+    resumeTimer()
+  }
+}
+
+function onBeforeUnload() {
+  pauseTimer()
+}
+
 onMounted(() => {
-  // 尝试从 localStorage 恢复用户状态
   if (userStore.token) {
     userStore.fetchProfile()
   }
+  // 启动在线时长追踪（无论是否登录都追踪）
+  startOnlineTimer()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
+
+onUnmounted(() => {
+  pauseTimer()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  window.removeEventListener('beforeunload', onBeforeUnload)
 })
 </script>
 
