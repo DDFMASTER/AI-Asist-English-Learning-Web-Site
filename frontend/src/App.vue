@@ -1,5 +1,5 @@
 <template>
-  <div id="lingua-app">
+  <div id="engli-app">
     <AppNav v-if="$route.name !== 'Login'" />
     <router-view />
     <LoginModal
@@ -32,7 +32,7 @@ onMounted(() => {
 </script>
 
 <style>
-#lingua-app {
+#engli-app {
   min-height: 100vh;
 }
 </style>

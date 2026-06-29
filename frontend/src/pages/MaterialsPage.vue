@@ -103,12 +103,6 @@
               <span :class="{ 'text-gray-500 line-through': task.done }">{{ task.name }}</span>
             </div>
           </div>
-          <router-link
-            to="/tasks"
-            class="block w-full text-center mt-4 py-2 border border-gray-100 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-all"
-          >
-            查看全部 →
-          </router-link>
         </div>
 
         <!-- 浏览历史 -->

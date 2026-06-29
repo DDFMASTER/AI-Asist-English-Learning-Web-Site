@@ -14,12 +14,6 @@ const routes = [
     meta: { title: '智能读物匹配', requiresAuth: true }
   },
   {
-    path: '/tasks',
-    name: 'Tasks',
-    component: () => import('@/pages/TasksPage.vue'),
-    meta: { title: '任务管理中心', requiresAuth: true }
-  },
-  {
     path: '/assessment',
     name: 'Assessment',
     component: () => import('@/pages/AssessmentPage.vue'),
@@ -74,8 +68,8 @@ router.beforeEach((to, from, next) => {
 
 // 设置页面标题
 router.afterEach((to) => {
-  const title = to.meta.title || 'LinguaAI'
-  document.title = `${title} - LinguaAI`
+  const title = to.meta.title || 'EngliAI'
+  document.title = `${title} - EngliAI`
 })
 
 export default router

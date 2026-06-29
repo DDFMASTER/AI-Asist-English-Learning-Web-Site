@@ -123,12 +123,6 @@ export const useTaskStore = defineStore('task', () => {
   /** XP 是否已达上限 */
   const isXpCapped = computed(() => xpEarned.value >= DAILY_XP_CAP)
 
-  /** 本周完成率（以每日 XP 达标为基础） */
-  const weekProgress = computed(() => {
-    if (xpHistory.value.length === 0) return 0
-    const daysWithXp = xpHistory.value.filter(d => d.xpEarned > 0).length
-    return Math.round((daysWithXp / xpHistory.value.length) * 100)
-  })
 
   // ========== 动作 ==========
 
@@ -348,19 +342,6 @@ export const useTaskStore = defineStore('task', () => {
     await initDailyTasks()
   }
 
-  /** @deprecated 本周任务现改为从每日统计派生 */
-  async function fetchWeekTasks() {
-    // 从 XP 历史计算本周汇总
-    if (xpHistory.value.length === 0) {
-      await getXpHistory(7).then(h => { xpHistory.value = h })
-    }
-  }
-
-  /** @deprecated 不在此页面使用的占位 */
-  function addWeekTask() {}
-  function deleteWeekTask() {}
-  function editWeekTask() {}
-
   return {
     // 状态
     todayTasks,
@@ -378,7 +359,6 @@ export const useTaskStore = defineStore('task', () => {
     remainingXp,
     xpProgressPercent,
     isXpCapped,
-    weekProgress,
 
     // 动作
     initDailyTasks,
@@ -387,9 +367,5 @@ export const useTaskStore = defineStore('task', () => {
     deleteTodayTask,
     editTodayTaskName,
     fetchTodayTasks,
-    fetchWeekTasks,
-    addWeekTask,
-    deleteWeekTask,
-    editWeekTask,
   }
 })

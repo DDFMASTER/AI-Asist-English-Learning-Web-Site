@@ -14,7 +14,7 @@
       <div class="w-8 h-8 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
         <Icon icon="ph:book-open-text-bold" class="text-white text-xl" />
       </div>
-      <span class="text-xl font-bold text-white tracking-tight">LinguaAI</span>
+      <span class="text-xl font-bold text-white tracking-tight">EngliAI</span>
     </div>
 
     <!-- 中央卡片 -->
@@ -108,7 +108,7 @@
     <!-- 底部介绍文字 -->
     <div class="relative z-10 mt-10 mb-8 px-4 max-w-2xl text-center">
       <p class="text-white/80 text-sm leading-relaxed">
-        LinguaAI 是一款基于人工智能的英语学习平台，通过智能分析你的词汇量、阅读偏好和学习目标，
+        EngliAI 是一款基于人工智能的英语学习平台，通过智能分析你的词汇量、阅读偏好和学习目标，
         为你精准匹配适合当前水平的英文读物。结合自适应测评系统与游戏化学习体验，
         让每一次阅读都成为高效的能力进阶之旅。
       </p>
