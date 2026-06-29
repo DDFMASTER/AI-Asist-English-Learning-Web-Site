@@ -194,6 +194,7 @@ import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useReaderStore } from '@/stores/reader'
+import { useTaskStore } from '@/stores/task'
 import WordPopover from '@/components/WordPopover.vue'
 import CulturePopover from '@/components/CulturePopover.vue'
 import { useRequireAuth } from '@/composables/useAuth'
@@ -202,6 +203,7 @@ import { addToHistory } from '@/utils/historyDB'
 const route = useRoute()
 const router = useRouter()
 const readerStore = useReaderStore()
+const taskStore = useTaskStore()
 const { guard } = useRequireAuth()
 
 // ========== 单词分词 ==========
@@ -439,11 +441,14 @@ function handleScroll() {
 onMounted(async () => {
   const articleId = route.query.id
   await readerStore.fetchArticle(articleId)
-  // 记录浏览历史到 IndexedDB
   if (articleId && readerStore.article?.title) {
+    // 记录浏览历史到 IndexedDB
     addToHistory(articleId, readerStore.article.title).catch(err => {
       console.error('记录浏览历史失败:', err)
     })
+    // 通知任务系统：已阅读一篇文章（用于自动检测阅读类任务完成）
+    taskStore.initDailyTasks()
+    taskStore.recordArticleRead(articleId, readerStore.article.difficulty)
   }
   document.addEventListener('click', handleGlobalClick)
   window.addEventListener('scroll', handleScroll)

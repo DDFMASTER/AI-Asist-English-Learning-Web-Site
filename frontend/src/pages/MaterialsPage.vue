@@ -145,6 +145,7 @@
       </div>
     </div>
   </main>
+
 </template>
 
 <script setup>
@@ -194,10 +195,14 @@ const taskProgressPercent = computed(() => {
  *   基础类: 初中, 高中
  */
 const DIFFICULTY_CATEGORY = {
+  '期刊': 'advanced',
+  '原著': 'advanced',
   '托福': 'advanced',
   '考研': 'exam',
   '四级': 'exam',
   '六级': 'exam',
+  '故事': 'basic',
+  '日常': 'basic',
   '初中': 'basic',
   '高中': 'basic',
 }
@@ -206,12 +211,16 @@ const DIFFICULTY_CATEGORY = {
  * 难度 → 显示简称（用于卡片徽章）
  */
 const DIFFICULTY_LABEL = {
+  '期刊': '期刊',
+  '原著': '原著',
   '初中': '初中',
   '高中': '高中',
   '四级': 'CET-4',
   '六级': 'CET-6',
   '考研': '考研',
   '托福': 'TOEFL',
+  '故事': '故事',
+  '日常': '日常',
 }
 
 // 按分类过滤文章
