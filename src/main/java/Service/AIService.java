@@ -16,7 +16,7 @@ import java.util.concurrent.CompletionException;
 public class AIService {
 
     private static final String API_URL = "https://api.deepseek.com/chat/completions";
-    private static final String API_KEY = "sk-xxxx" + ""; // 部署时替换为真实 key
+    private static final String API_KEY = "sk-***" + ""; // 部署时替换为真实 key
     private static final String MODEL = "deepseek-v4-flash";
     private static final int TIMEOUT_SECONDS = 15;
 

@@ -8,6 +8,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class UserDAOImpl implements UserDAO {
 
@@ -147,6 +149,74 @@ public class UserDAOImpl implements UserDAO {
         user.setCreatedAt(toLocalDateTime(rs.getTimestamp("created_at")));
         user.setLastLogin(toLocalDateTime(rs.getTimestamp("last_login")));
         return user;
+    }
+
+    // ========== 管理员方法 ==========
+
+    @Override
+    public List<User> findAll() {
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT user_id, username, password, salt, profile, role, " +
+                     "study_purpose, literacy, last_literacy, experience, " +
+                     "last_checkin, created_at, last_login " +
+                     "FROM user ORDER BY user_id DESC";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                users.add(mapRow(rs));
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("查询全部用户失败", e);
+        }
+        return users;
+    }
+
+    @Override
+    public int deleteById(Long userId) {
+        String sql = "DELETE FROM user WHERE user_id = ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setLong(1, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("删除用户失败: " + userId, e);
+        }
+    }
+
+    @Override
+    public int updatePassword(Long userId, String password, String salt) {
+        String sql = "UPDATE user SET password = ?, salt = ? WHERE user_id = ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, password);
+            ps.setString(2, salt);
+            ps.setLong(3, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("重置密码失败: " + userId, e);
+        }
+    }
+
+    @Override
+    public int updateRole(Long userId, String role) {
+        String sql = "UPDATE user SET role = ? WHERE user_id = ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, role);
+            ps.setLong(2, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("更新角色失败: " + userId, e);
+        }
     }
 
     private LocalDateTime toLocalDateTime(Timestamp ts) {
