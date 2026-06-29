@@ -70,7 +70,12 @@
       <article id="articleContent">
         <!-- 文章段落（按 \\n\\n 分割） -->
         <template v-for="(paragraph, pIdx) in paragraphs" :key="pIdx">
-          <p class="article-p" :style="{ fontSize: readerStore.fontSize + 'px' }">
+          <p
+            class="article-p"
+            :class="{ 'cursor-pointer hover:bg-blue-50/30 rounded-lg transition-colors px-2 -mx-2': readerStore.showTranslation }"
+            :style="{ fontSize: readerStore.fontSize + 'px' }"
+            @click="(e) => handleParagraphClick(pIdx, e)"
+          >
             <!-- 段落内混合文本、交互单词、文化注解 -->
             <template v-for="(segment, sIdx) in paragraph.segments" :key="sIdx">
               <span v-if="segment.type === 'text'">{{ segment.text }}</span>
@@ -200,6 +205,15 @@
       :position="culturePopover.position"
     />
 
+    <!-- 段落翻译浮窗 -->
+    <ParagraphTranslationPopover
+      :visible="showTranslationPopover"
+      :original-text="currentTranslationOriginal"
+      :translation-data="currentTranslationData"
+      :position="translationPosition"
+      @close="showTranslationPopover = false"
+    />
+
     <!-- 文章右侧 AI 面板（文化背景 + 选择题） -->
     <ArticleSidePanel
       :visible="showSidePanel"
@@ -212,7 +226,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useReaderStore } from '@/stores/reader'
@@ -220,6 +234,7 @@ import { useTaskStore } from '@/stores/task'
 import WordPopover from '@/components/WordPopover.vue'
 import CulturePopover from '@/components/CulturePopover.vue'
 import ArticleSidePanel from '@/components/ArticleSidePanel.vue'
+import ParagraphTranslationPopover from '@/components/ParagraphTranslationPopover.vue'
 import { useRequireAuth } from '@/composables/useAuth'
 import { addToHistory } from '@/utils/historyDB'
 
@@ -322,6 +337,28 @@ const showAIDetail = ref(false)
 const aiDetailWord = ref('')
 const showSidePanel = ref(true)
 
+// ========== 段落翻译状态 ==========
+const showTranslationPopover = ref(false)
+const activeTranslationIndex = ref(-1)
+const translationPosition = reactive({ x: 0, y: 0 })
+
+// 当前激活段落的翻译数据
+const currentTranslationData = computed(() => {
+  if (activeTranslationIndex.value < 0) return null
+  const key = `${readerStore.article?.id}_${activeTranslationIndex.value}`
+  return readerStore.paragraphTranslations[key] || null
+})
+
+// 当前激活段落的原文
+const currentTranslationOriginal = computed(() => {
+  if (activeTranslationIndex.value < 0) return ''
+  const para = paragraphs.value[activeTranslationIndex.value]
+  if (!para) return ''
+  return para.segments
+    .map(s => s.text || (s.data?.word || ''))
+    .join('')
+})
+
 // 右侧面板位置：文章区域右边缘 + 20px gap
 const sidePanelX = computed(() => {
   return Math.max(20, Math.floor((window.innerWidth - 800) / 2) - 360)
@@ -341,6 +378,8 @@ const showSettings = ref(false)
 
 // ========== 单词点击 ==========
 function handleWordClick(wordData, event) {
+  // 段落翻译模式下不触发单词弹窗
+  if (readerStore.showTranslation) return
   event.stopPropagation()
   const articleEl = document.querySelector('.reader-container')
   const articleRect = articleEl ? articleEl.getBoundingClientRect() : null
@@ -426,6 +465,46 @@ function handleCultureClick(data, event) {
   wordPopover.visible = false
 }
 
+// ========== 段落点击（翻译模式） ==========
+function handleParagraphClick(pIdx, event) {
+  if (!readerStore.showTranslation) return  // 仅在段落翻译模式下生效
+  event.stopPropagation()
+
+  const articleEl = document.querySelector('.reader-container')
+  const articleRect = articleEl ? articleEl.getBoundingClientRect() : null
+
+  // 弹窗宽度 320px (w-80)，固定放在文章左侧
+  const popoverWidth = 320
+  const gap = 20
+  let left = articleRect ? articleRect.left - popoverWidth - gap : 0
+
+  // 如果左侧空间不足，回退到右侧
+  if (left < 10) {
+    left = Math.min((articleRect?.right || window.innerWidth) + gap, window.innerWidth - popoverWidth - 10)
+  }
+
+  // 垂直位置：固定距页面顶端 140px
+  const top = 140
+
+  translationPosition.x = Math.max(10, left)
+  translationPosition.y = top
+  activeTranslationIndex.value = pIdx
+  showTranslationPopover.value = true
+  culturePopover.visible = false
+  wordPopover.visible = false
+
+  // 获取段落原文并请求翻译
+  const para = paragraphs.value[pIdx]
+  if (para) {
+    const paraText = para.segments
+      .map(s => s.text || (s.data?.word || ''))
+      .join('')
+    readerStore.fetchParagraphTranslation(
+      readerStore.article?.id, pIdx, paraText
+    )
+  }
+}
+
 // ========== 其他操作 ==========
 function handleBookmark() {
   readerStore.addBookmark(readerStore.readingProgress)
@@ -483,6 +562,7 @@ function onBackToSummary() {
 function handleGlobalClick() {
   wordPopover.visible = false
   culturePopover.visible = false
+  showTranslationPopover.value = false
   showAIDetail.value = false
   aiDetailWord.value = ''
   showToc.value = false
@@ -497,6 +577,14 @@ function handleScroll() {
     readerStore.updateProgress(Math.round((scrollTop / docHeight) * 100))
   }
 }
+
+// 监听模式切换：关闭段落翻译模式时隐藏翻译弹窗
+watch(() => readerStore.showTranslation, (newVal) => {
+  if (!newVal) {
+    showTranslationPopover.value = false
+    activeTranslationIndex.value = -1
+  }
+})
 
 onMounted(async () => {
   const articleId = route.query.id

@@ -21,6 +21,11 @@ export const useReaderStore = defineStore('reader', () => {
   const culturalNotesCache = ref(null)  // { notes: [], loading: bool, error: str }
   const quizCache = ref(null)           // { questions: [], loading: bool, error: str }
 
+  // ========== 段落翻译缓存 ==========
+  /** @type {import('vue').Ref<Record<string, {zh: string, loading: boolean, error?: string}>>} */
+  const paragraphTranslations = ref({})
+  const translatingIndex = ref(-1)
+
   // ========== 计算属性 ==========
   const articleTitle = computed(() => article.value?.title || '加载中...')
   const articleContent = computed(() => article.value?.content || '')
@@ -124,10 +129,68 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   /**
-   * 切换翻译显示
+   * 切换翻译显示（段落翻译模式）
    */
   function toggleTranslation() {
     showTranslation.value = !showTranslation.value
+    // 切换模式时清除当前翻译面板
+    if (!showTranslation.value) {
+      translatingIndex.value = -1
+    }
+  }
+
+  /**
+   * 获取段落翻译（优先从缓存取，否则调用 AI）
+   * @param {string|number} articleId
+   * @param {number} pIdx 段落索引
+   * @param {string} paragraphText 段落原文
+   */
+  async function fetchParagraphTranslation(articleId, pIdx, paragraphText) {
+    const key = `${articleId}_${pIdx}`
+    // 已缓存则直接返回
+    if (paragraphTranslations.value[key]) return
+
+    // 标记为加载中
+    paragraphTranslations.value[key] = { zh: '', loading: true }
+    translatingIndex.value = pIdx
+
+    try {
+      const data = await request.post('/article/translate-paragraph', {
+        paragraph: paragraphText,
+      }, {
+        timeout: 25000, // AI 翻译较慢，给 25 秒
+      })
+      if (data.success && data.translation) {
+        paragraphTranslations.value[key] = {
+          zh: data.translation,
+          loading: false,
+        }
+      } else {
+        paragraphTranslations.value[key] = {
+          zh: '',
+          loading: false,
+          error: data.message || '翻译失败',
+        }
+      }
+    } catch (err) {
+      console.error('段落翻译失败:', err)
+      paragraphTranslations.value[key] = {
+        zh: '',
+        loading: false,
+        error: '翻译失败，请稍后重试',
+      }
+    } finally {
+      if (translatingIndex.value === pIdx) {
+        translatingIndex.value = -1
+      }
+    }
+  }
+
+  /**
+   * 清除当前段落翻译显示
+   */
+  function clearParagraphTranslation() {
+    translatingIndex.value = -1
   }
 
   /**
@@ -477,5 +540,9 @@ export const useReaderStore = defineStore('reader', () => {
     quizCache,
     prefetchCulturalNotes,
     prefetchQuiz,
+    paragraphTranslations,
+    translatingIndex,
+    fetchParagraphTranslation,
+    clearParagraphTranslation,
   }
 })

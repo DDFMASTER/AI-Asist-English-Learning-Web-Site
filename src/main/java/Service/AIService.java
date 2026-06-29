@@ -16,7 +16,7 @@ import java.util.concurrent.CompletionException;
 public class AIService {
 
     private static final String API_URL = "https://api.deepseek.com/chat/completions";
-    private static final String API_KEY = "sk-xxxx"; // 部署时替换为真实 key
+    private static final String API_KEY = "sk-xxxx" + ""; // 部署时替换为真实 key
     private static final String MODEL = "deepseek-v4-flash";
     private static final int TIMEOUT_SECONDS = 15;
 
@@ -45,6 +45,21 @@ public class AIService {
                 .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .build();
     }
+
+    // ========== 段落翻译 ==========
+
+    private static final String TRANSLATION_SYSTEM_PROMPT =
+            "你是一个专业的中英翻译助手。请将用户提供的英文段落翻译成流畅、准确的中文。\n" +
+            "\n" +
+            "要求：\n" +
+            "1. 翻译自然流畅，符合中文表达习惯\n" +
+            "2. 保留原文的语气和风格\n" +
+            "3. 直接返回中文译文，不要添加任何解释或说明\n" +
+            "\n" +
+            "请严格以如下 JSON 格式输出（不要输出其他内容）：\n" +
+            "{\n" +
+            "  \"translation\": \"中文译文\"\n" +
+            "}";
 
     // ========== 文化背景分析 ==========
 
@@ -324,6 +339,40 @@ public class AIService {
                         + (content.length() > 300 ? content.substring(0, 300) + "..." : content);
                 result.rawResponse = "=== AI 返回的 content ===\n" + content
                         + "\n\n=== API 原始响应 ===\n" + result.rawResponse;
+            }
+        }
+
+        result.duration = System.currentTimeMillis() - startTime;
+        return result;
+    }
+
+    /**
+     * 翻译英文段落为中文。
+     * @param paragraph 英文段落文本
+     * @return TranslationResult，包含中文译文或错误信息
+     */
+    public TranslationResult translateParagraph(String paragraph) {
+        TranslationResult result = new TranslationResult();
+        result.originalText = paragraph;
+        long startTime = System.currentTimeMillis();
+
+        String content = callDeepSeek(TRANSLATION_SYSTEM_PROMPT, paragraph, 20, result);
+
+        if (content != null) {
+            // 提取 translation 字段
+            for (String key : new String[]{"\"translation\":\"", "\"translation\": \"", "\"translation\" :\""}) {
+                int start = content.indexOf(key);
+                if (start != -1) {
+                    start += key.length();
+                    String translation = extractStringValue(content, start);
+                    if (translation != null && !translation.isEmpty()) {
+                        result.translation = translation;
+                        break;
+                    }
+                }
+            }
+            if (result.translation == null) {
+                result.error = "翻译结果解析失败";
             }
         }
 
@@ -744,6 +793,35 @@ public class AIService {
                 sb.append(",\"rawResponse\":\"")
                         .append(escapeJsonStatic(truncated))
                         .append("\"");
+            }
+
+            sb.append("}");
+            return sb.toString();
+        }
+    }
+
+    // ========== 段落翻译结果 ==========
+
+    public static class TranslationResult extends AIResultBase {
+        public String originalText;
+        public String translation;
+
+        public boolean isSuccess() {
+            return error == null && translation != null && !translation.isEmpty();
+        }
+
+        public String toJson() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append("\"success\":").append(isSuccess());
+            sb.append(",\"httpStatus\":").append(httpStatus);
+            sb.append(",\"duration\":").append(duration);
+
+            if (error != null) {
+                sb.append(",\"message\":\"").append(escapeJsonStatic(error)).append("\"");
+            }
+            if (translation != null) {
+                sb.append(",\"translation\":\"").append(escapeJsonStatic(translation)).append("\"");
             }
 
             sb.append("}");
