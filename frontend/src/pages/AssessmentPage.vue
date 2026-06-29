@@ -7,7 +7,7 @@
       </div>
       <h1 class="text-4xl font-bold mb-6">英语能力自适应测评</h1>
       <p class="text-gray-500 text-lg mb-10 leading-relaxed">
-        本测评将通过 15 道精选题目，实时评估你的词汇量、语法掌握度及阅读理解能力。AI 会根据你的答题表现动态调整后续题目难度。
+        本测评将通过 10 道精选题目，实时评估你的词汇量、语法掌握度及阅读理解能力。AI 会根据你的答题表现动态调整后续题目难度。
       </p>
       <div class="grid grid-cols-3 gap-6 mb-12 text-left">
         <div class="card !p-6">
@@ -15,7 +15,7 @@
           <div class="text-xs text-gray-400">预计时长</div>
         </div>
         <div class="card !p-6">
-          <div class="text-[#2563EB] mb-2 font-bold">15 题</div>
+          <div class="text-[#2563EB] mb-2 font-bold">10 题</div>
           <div class="text-xs text-gray-400">题目数量</div>
         </div>
         <div class="card !p-6">
@@ -23,9 +23,33 @@
           <div class="text-xs text-gray-400">AI 实时调整</div>
         </div>
       </div>
+
+      <!-- 继续上次测评 -->
+      <div v-if="savedProgress" class="mb-6">
+        <div class="inline-flex items-center gap-2 px-5 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 mb-4">
+          <Icon icon="ph:clock-counter-clockwise-bold" class="text-lg" />
+          <span>上次答到第 <strong>{{ savedProgress.currentIndex + 1 }}</strong> 题（共 {{ savedProgress.questions.length }} 题）</span>
+        </div>
+        <br />
+        <button
+          class="px-10 py-3 bg-white border-2 border-[#2563EB] text-[#2563EB] rounded-2xl font-bold hover:bg-blue-50 transition-colors mr-4"
+          @click="handleResume"
+        >
+          继续上次测评
+        </button>
+        <button
+          class="px-10 py-3 bg-[#2563EB] text-white rounded-2xl font-bold shadow-xl shadow-blue-200 hover:scale-105 transition-transform"
+          @click="handleStart"
+        >
+          重新开始
+        </button>
+      </div>
+
+      <!-- 无进度时的开始按钮 -->
       <button
+        v-else
         class="px-12 py-4 bg-[#2563EB] text-white rounded-2xl text-lg font-bold shadow-xl shadow-blue-200 hover:scale-105 transition-transform"
-        @click="guard(handleStart)"
+        @click="handleStart"
       >
         开始测评
       </button>
@@ -166,22 +190,69 @@
       <Icon icon="ph:spinner-bold" class="text-4xl text-[#2563EB] animate-spin mx-auto mb-4" />
       <p class="text-gray-400">加载测评题目中...</p>
     </div>
+
+    <!-- ========== 退出确认弹窗 ========== -->
+    <Teleport to="body">
+      <div
+        v-if="showExitConfirm"
+        class="fixed inset-0 z-[200] flex items-center justify-center"
+        @click.self="showExitConfirm = false"
+      >
+        <!-- 遮罩 -->
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+        <!-- 卡片 -->
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 z-10 text-center">
+          <div class="w-14 h-14 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center mx-auto mb-5">
+            <Icon icon="ph:warning-bold" class="text-3xl" />
+          </div>
+          <h3 class="text-lg font-bold text-[#1F2937] mb-2">确定退出测评？</h3>
+          <p class="text-sm text-gray-400 mb-6">
+            当前进度已自动保存，下次进入时可以从第 <strong class="text-[#2563EB]">{{ store.currentIndex + 1 }}</strong> 题继续。
+          </p>
+          <div class="flex gap-3">
+            <button
+              class="flex-1 h-11 border border-gray-200 rounded-xl text-sm font-medium text-gray-500 hover:bg-gray-50 transition-all"
+              @click="showExitConfirm = false"
+            >
+              继续答题
+            </button>
+            <button
+              class="flex-1 h-11 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-all"
+              @click="handleConfirmExit"
+            >
+              退出测评
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useAssessmentStore } from '@/stores/assessment'
-import { useRequireAuth } from '@/composables/useAuth'
 
 const store = useAssessmentStore()
 const router = useRouter()
-const { guard } = useRequireAuth()
+
+const showExitConfirm = ref(false)
+const savedProgress = ref(null)
 
 async function handleStart() {
+  store.clearProgress()
+  savedProgress.value = null
   await store.startAssessment()
+}
+
+function handleResume() {
+  const data = savedProgress.value
+  if (data) {
+    store.restoreProgress(data)
+    savedProgress.value = null
+  }
 }
 
 async function handleNext() {
@@ -196,14 +267,23 @@ async function handleNext() {
 }
 
 function handleExit() {
-  if (confirm('确定退出测评吗？当前进度已自动保存。')) {
-    store.resetAssessment()
-    router.push('/materials')
-  }
+  showExitConfirm.value = true
+}
+
+function handleConfirmExit() {
+  showExitConfirm.value = false
+  // 不清除进度——退出时保留，下次可继续
+  store.resetAssessment()
+  router.push('/materials')
 }
 
 onMounted(() => {
-  // 每次进入页面重置状态
+  // 检测是否有上次保存的进度
+  const data = store.loadProgress()
+  if (data) {
+    // 保存完整数据用于恢复
+    savedProgress.value = data
+  }
   store.resetAssessment()
 })
 </script>

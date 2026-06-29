@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import request from '@/utils/request'
 
+const PROGRESS_KEY = 'assessment_progress'
+
 export const useAssessmentStore = defineStore('assessment', () => {
   // ========== 状态 ==========
   const currentScreen = ref('start') // 'start' | 'quiz'
@@ -71,6 +73,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
       ...answers.value,
       [currentQuestion.value.id]: optionId,
     }
+    saveProgress()
   }
 
   /**
@@ -82,6 +85,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
       ...comprehensionLevels.value,
       [currentQuestion.value.id]: level,
     }
+    saveProgress()
   }
 
   /**
@@ -90,6 +94,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
   function prevQuestion() {
     if (currentIndex.value > 0) {
       currentIndex.value--
+      saveProgress()
     }
   }
 
@@ -102,6 +107,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
     }
     if (currentIndex.value < totalQuestions.value - 1) {
       currentIndex.value++
+      saveProgress()
     }
   }
 
@@ -116,10 +122,14 @@ export const useAssessmentStore = defineStore('assessment', () => {
         comprehensionLevels: comprehensionLevels.value,
       }
       const data = await request.post('/assessment/submit', payload)
+      if (data && data.success) {
+        clearProgress()
+      }
       return data
     } catch (error) {
       console.error('提交测评失败:', error)
       // 即使失败也返回 mock 结果用于 demo
+      clearProgress()
       return { success: true, result: {} }
     } finally {
       loading.value = false
@@ -137,9 +147,56 @@ export const useAssessmentStore = defineStore('assessment', () => {
     comprehensionLevels.value = {}
   }
 
+  // ========== 进度持久化 ==========
+
+  function saveProgress() {
+    try {
+      const data = {
+        questions: questions.value,
+        currentIndex: currentIndex.value,
+        answers: answers.value,
+        comprehensionLevels: comprehensionLevels.value,
+      }
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(data))
+    } catch {
+      // localStorage 不可用时静默失败
+    }
+  }
+
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY)
+      if (!raw) return null
+      const data = JSON.parse(raw)
+      // 校验数据完整性
+      if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+        return null
+      }
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  function clearProgress() {
+    try {
+      localStorage.removeItem(PROGRESS_KEY)
+    } catch {
+      // 静默失败
+    }
+  }
+
+  function restoreProgress(data) {
+    questions.value = data.questions
+    currentIndex.value = data.currentIndex || 0
+    answers.value = data.answers || {}
+    comprehensionLevels.value = data.comprehensionLevels || {}
+    currentScreen.value = 'quiz'
+  }
+
   // ========== Mock 数据生成 ==========
   function generateMockQuestions() {
-    return Array.from({ length: 15 }, (_, i) => ({
+    return Array.from({ length: 10 }, (_, i) => ({
       id: i + 1,
       passage: 'The concept of "Smart Cities" has gained significant momentum over the past decade. By leveraging Internet of Things (IoT) technologies, urban centers can now monitor traffic patterns, energy consumption, and public safety in real-time. However, the implementation of such systems is not without controversy. Critics argue that the pervasive nature of sensors and cameras raises serious concerns regarding citizen privacy and data security.',
       question: i === 0
@@ -175,5 +232,9 @@ export const useAssessmentStore = defineStore('assessment', () => {
     nextQuestion,
     submitAssessment,
     resetAssessment,
+    saveProgress,
+    loadProgress,
+    clearProgress,
+    restoreProgress,
   }
 })

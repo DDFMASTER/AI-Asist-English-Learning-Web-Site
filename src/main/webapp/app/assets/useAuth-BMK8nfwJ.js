@@ -1,1 +1,0 @@
-import{i as e}from"./index-CNi8ABuF.js";function t(){let t=e();function n(e){return(...n)=>{if(!t.isLoggedIn){t.openLoginModal();return}return e(...n)}}return{guard:n,isLoggedIn:t.isLoggedIn}}export{t};

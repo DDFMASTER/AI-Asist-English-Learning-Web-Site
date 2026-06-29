@@ -150,8 +150,12 @@ async function handleSubmit() {
       isRegisterMode.value = false
       errorMsg.value = ''
     } else {
+      console.log('[LoginModal] 登录提交中...')
       await userStore.login(form.username, form.password)
+      console.log('[LoginModal] 登录成功, pendingAction:', !!userStore.pendingAction)
       emit('login-success')
+      userStore.runPendingAction() // 登录成功后执行被 guard 拦截的原操作
+      console.log('[LoginModal] pendingAction 已执行')
       handleClose()
     }
   } catch (error) {

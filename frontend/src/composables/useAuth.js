@@ -18,10 +18,15 @@ export function useRequireAuth() {
    */
   function guard(fn) {
     return (...args) => {
+      console.log('[guard] isLoggedIn:', userStore.isLoggedIn, 'token:', !!userStore.token, 'user:', !!userStore.user)
       if (!userStore.isLoggedIn) {
+        console.log('[guard] 未登录，弹出登录弹窗，已保存待执行函数')
+        // 保存待执行函数，登录成功后自动重试
+        userStore.setPendingAction(() => fn(...args))
         userStore.openLoginModal()
         return
       }
+      console.log('[guard] 已登录，执行原函数')
       return fn(...args)
     }
   }

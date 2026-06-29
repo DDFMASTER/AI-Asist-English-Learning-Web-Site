@@ -7,6 +7,7 @@ export const useUserStore = defineStore('user', () => {
   const user = ref(loadUserFromStorage())
   const token = ref(localStorage.getItem('token') || '')
   const showLoginModal = ref(false)
+  const pendingAction = ref(null) // 登录成功后待执行的回调
 
   // ========== 计算属性 ==========
   const isLoggedIn = computed(() => !!token.value && !!user.value)
@@ -120,6 +121,25 @@ export const useUserStore = defineStore('user', () => {
    */
   function closeLoginModal() {
     showLoginModal.value = false
+    pendingAction.value = null // 关闭弹窗时清除待执行动作
+  }
+
+  /**
+   * 设置登录成功后待执行的回调
+   */
+  function setPendingAction(fn) {
+    pendingAction.value = fn
+  }
+
+  /**
+   * 执行并清除待执行回调（登录成功后调用）
+   */
+  function runPendingAction() {
+    const fn = pendingAction.value
+    pendingAction.value = null
+    if (typeof fn === 'function') {
+      fn()
+    }
   }
 
   /**
@@ -138,12 +158,15 @@ export const useUserStore = defineStore('user', () => {
     token,
     showLoginModal,
     isLoggedIn,
+    pendingAction,
     login,
     register,
     logout,
     fetchProfile,
     openLoginModal,
     closeLoginModal,
+    setPendingAction,
+    runPendingAction,
     requireLogin,
   }
 })

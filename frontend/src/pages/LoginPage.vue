@@ -170,6 +170,8 @@ async function handleSubmit() {
       errorMsg.value = ''
     } else {
       await userStore.login(form.username, form.password)
+      // 清除可能存在的过期 pendingAction（全页面登录后会跳转，不需要重试原操作）
+      userStore.runPendingAction()
       // 登录成功后跳转
       const redirect = route.query.redirect || '/materials'
       router.push(redirect)

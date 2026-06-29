@@ -42,12 +42,6 @@
             >
               开启 {{ result.nextLevel }} 学习之旅
             </router-link>
-            <button
-              class="px-8 py-3 border border-gray-200 text-gray-500 rounded-xl font-bold hover:bg-gray-50 transition-all"
-              @click="guard(restartAssessment)"
-            >
-              重新测评
-            </button>
           </div>
         </div>
       </div>
@@ -85,72 +79,13 @@
       </div>
     </div>
 
-    <!-- 底部推荐 -->
-    <div class="grid grid-cols-2 gap-8 mt-8">
-      <!-- AI 薄弱词汇推送 -->
-      <div class="card">
-        <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
-          <Icon icon="ph:lightning-bold" class="text-[#F59E0B]" />
-          AI 薄弱词汇推送
-        </h3>
-        <div class="grid grid-cols-1 gap-4">
-          <div
-            v-for="word in weakWords"
-            :key="word.word"
-            class="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
-          >
-            <div>
-              <div class="font-bold text-[#2563EB]">{{ word.word }}</div>
-              <div class="text-xs text-gray-400">{{ word.definition }}</div>
-            </div>
-            <button
-              class="text-xl text-gray-300 hover:text-[#2563EB] cursor-pointer transition-colors"
-              @click="guard(() => addToVocabulary(word))"
-            >
-              <Icon icon="ph:plus-circle-bold" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 针对性强化阅读 -->
-      <div class="card">
-        <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
-          <Icon icon="ph:book-bookmark-bold" class="text-[#2563EB]" />
-          针对性强化阅读
-        </h3>
-        <div class="space-y-4">
-          <div
-            v-for="article in recommendedArticles"
-            :key="article.id"
-            class="flex gap-4 group cursor-pointer"
-            @click="guard(() => goToReader(article.id))"
-          >
-            <div class="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center flex-none">
-              <Icon :icon="article.icon" class="text-2xl opacity-40" :class="article.iconColor" />
-            </div>
-            <div>
-              <h4 class="text-sm font-bold group-hover:text-[#2563EB] transition-colors">
-                {{ article.title }}
-              </h4>
-              <p class="text-[10px] text-gray-400 mt-1">适合提升你的"{{ article.targetDimension }}"维度</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </main>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as echarts from 'echarts'
-import { useRequireAuth } from '@/composables/useAuth'
-
-const router = useRouter()
-const { guard } = useRequireAuth()
 
 // ========== 结果数据 ==========
 const result = reactive({
@@ -166,31 +101,6 @@ const abilityDetails = ref([
   { label: '阅读理解 (Reading)', percent: 65, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
   { label: '文化背景 (Culture)', percent: 55, colorClass: 'text-[#F59E0B]', barClass: 'bg-[#F59E0B]' },
   { label: '逻辑分析 (Logic)', percent: 70, colorClass: 'text-[#10B981]', barClass: 'bg-[#10B981]' },
-])
-
-// 薄弱词汇
-const weakWords = ref([
-  { word: 'Algorithm', definition: 'n. 算法，演算法' },
-  { word: 'Paradigm', definition: 'n. 范式，典范' },
-  { word: 'Cognitive', definition: 'adj. 认知的，感知的' },
-])
-
-// 推荐文章
-const recommendedArticles = ref([
-  {
-    id: 1,
-    title: 'The Philosophy of Education',
-    targetDimension: '文化背景',
-    icon: 'ph:books-bold',
-    iconColor: 'text-[#2563EB]',
-  },
-  {
-    id: 2,
-    title: 'Advanced Grammar in Use',
-    targetDimension: '语法掌握度',
-    icon: 'ph:pen-bold',
-    iconColor: 'text-yellow-500',
-  },
 ])
 
 // ========== ECharts 雷达图 ==========
@@ -233,19 +143,6 @@ function handleResize() {
 }
 
 // ========== 操作方法 ==========
-function restartAssessment() {
-  router.push('/assessment')
-}
-
-function goToReader(articleId) {
-  router.push(`/reader?id=${articleId}`)
-}
-
-function addToVocabulary(word) {
-  // TODO: 调用 API 加入生词本
-  alert(`已添加「${word.word}」到生词本`)
-}
-
 onMounted(async () => {
   await nextTick()
   initRadarChart()
