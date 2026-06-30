@@ -3,7 +3,7 @@
     <!-- 用户信息卡片 -->
     <div class="card flex items-center gap-8 mb-8">
       <div
-        class="w-20 h-20 rounded-full flex items-center justify-center flex-none cursor-pointer hover:ring-4 hover:ring-blue-200 transition-all overflow-hidden relative group"
+        class="w-20 h-20 rounded-xl flex items-center justify-center flex-none cursor-pointer hover:ring-4 hover:ring-blue-200 transition-all overflow-hidden relative group"
         @click="showAvatarPicker = true"
         title="点击更换头像"
       >

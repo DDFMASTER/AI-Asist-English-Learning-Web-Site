@@ -140,6 +140,26 @@ export async function getRecentHistory(limit = MAX_HISTORY) {
 }
 
 /**
+ * 获取所有已读文章的 ID 集合
+ * @returns {Promise<Set<number>>}
+ */
+export async function getReadArticleIds() {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('browseHistory', 'readonly')
+    const store = tx.objectStore('browseHistory')
+    const getAll = store.getAll()
+    getAll.onsuccess = () => {
+      const records = getAll.result || []
+      const ids = new Set(records.map(r => Number(r.articleId)))
+      resolve(ids)
+    }
+    getAll.onerror = () => reject(getAll.error)
+    tx.oncomplete = () => db.close()
+  })
+}
+
+/**
  * 将时间戳转为相对时间描述
  * @param {number} timestamp
  * @returns {string} 如 "刚刚"、"5分钟前"、"2小时前"、"3天前"

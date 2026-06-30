@@ -109,13 +109,54 @@ const IRREGULAR = {
   hypotheses: 'hypothesis',
   parentheses: 'parenthesis',
   oxen: 'ox',
-  lives: 'life',  // knife的复数在规则中处理
+  lives: 'life',
   shelves: 'shelf',
   selves: 'self',
   wolves: 'wolf',
   thieves: 'thief',
   loaves: 'loaf',
   halves: 'half',
+  knives: 'knife',
+  leaves: 'leaf',
+  wives: 'wife',
+  elves: 'elf',
+  calves: 'calf',
+  scarves: 'scarf',
+  hooves: 'hoof',
+  dwarves: 'dwarf',
+  // 拉丁/希腊词源复数
+  cacti: 'cactus',
+  fungi: 'fungus',
+  stimuli: 'stimulus',
+  syllabi: 'syllabus',
+  foci: 'focus',
+  radii: 'radius',
+  bacteria: 'bacterium',
+  curricula: 'curriculum',
+  media: 'medium',
+  memoranda: 'memorandum',
+  strata: 'stratum',
+  vertebrae: 'vertebra',
+  formulae: 'formula',
+  antennae: 'antenna',
+  millennia: 'millennium',
+  automata: 'automaton',
+  errata: 'erratum',
+  addenda: 'addendum',
+  oases: 'oasis',
+  neuroses: 'neurosis',
+  ellipses: 'ellipsis',
+  synopses: 'synopsis',
+  // 其他常见不规则复数
+  corps: 'corps',
+  series: 'series',
+  species: 'species',
+  means: 'means',
+  offspring: 'offspring',
+  sheep: 'sheep',
+  deer: 'deer',
+  fish: 'fish',
+  aircraft: 'aircraft',
 
   // ── 形容词 / 副词 ──
   better: 'good', best: 'good',
@@ -124,6 +165,51 @@ const IRREGULAR = {
   less: 'little', least: 'little',
   farther: 'far', farthest: 'far', further: 'far', furthest: 'far',
   older: 'old', oldest: 'old', elder: 'old', eldest: 'old',
+  // 不规则比较级/最高级
+  later: 'late', latest: 'late', latter: 'late', last: 'late',
+  bigger: 'big', biggest: 'big',
+  larger: 'large', largest: 'large',
+  smaller: 'small', smallest: 'small',
+  higher: 'high', highest: 'high',
+  lower: 'low', lowest: 'low',
+  younger: 'young', youngest: 'young',
+  longer: 'long', longest: 'long',
+  shorter: 'short', shortest: 'short',
+  faster: 'fast', fastest: 'fast',
+  stronger: 'strong', strongest: 'strong',
+  weaker: 'weak', weakest: 'weak',
+  richer: 'rich', richest: 'rich',
+  poorer: 'poor', poorest: 'poor',
+  wider: 'wide', widest: 'wide',
+  deeper: 'deep', deepest: 'deep',
+  heavier: 'heavy', heaviest: 'heavy',
+  busier: 'busy', busiest: 'busy',
+  funnier: 'funny', funniest: 'funny',
+  luckier: 'lucky', luckiest: 'lucky',
+  lovelier: 'lovely', loveliest: 'lovely',
+  angrier: 'angry', angriest: 'angry',
+  dirtier: 'dirty', dirtiest: 'dirty',
+  drier: 'dry', driest: 'dry',
+  earlier: 'early', earliest: 'early',
+  uglier: 'ugly', ugliest: 'ugly',
+  tidier: 'tidy', tidiest: 'tidy',
+  healthier: 'healthy', healthiest: 'healthy',
+  wealthier: 'wealthy', wealthiest: 'wealthy',
+  noisier: 'noisy', noisiest: 'noisy',
+  sunnier: 'sunny', sunniest: 'sunny',
+  windier: 'windy', windiest: 'windy',
+  friendlier: 'friendly', friendliest: 'friendly',
+  livelier: 'lively', liveliest: 'lively',
+  happier: 'happy', happiest: 'happy',
+  easier: 'easy', easiest: 'easy',
+  prettier: 'pretty', prettiest: 'pretty',
+}
+
+// 一词多源补充：某些变形对应多个原形（如 better → good/well）
+const SECONDARY_IRREGULAR = {
+  better: 'well', best: 'well',
+  worse: 'ill',  // worse 也可以是 ill 的比较级
+  // more/most 的 "much" 义项已在主表中用 "many"
 }
 
 // ==================== 规则还原 ====================
@@ -198,8 +284,18 @@ function ruleBasedCandidates(word) {
     }
   }
 
-  // 8. -er → remove / -e  (bigger→big, later→late, teacher→teach)
-  if (word.endsWith('er') && word.length > 4) {
+  // 8. -ier → -y  (happier→happy, easier→easy, prettier→pretty)
+  if (word.endsWith('ier') && word.length > 4) {
+    candidates.push(word.slice(0, -3) + 'y')
+  }
+
+  // 9. -iest → -y  (happiest→happy, easiest→easy, prettiest→pretty)
+  if (word.endsWith('iest') && word.length > 5) {
+    candidates.push(word.slice(0, -4) + 'y')
+  }
+
+  // 10. -er → remove / -e  (bigger→big, later→late, teacher→teach)
+  if (word.endsWith('er') && !word.endsWith('ier') && word.length > 4) {
     const stem = word.slice(0, -2)
     candidates.push(stem)
     candidates.push(stem + 'e')
@@ -211,10 +307,11 @@ function ruleBasedCandidates(word) {
         candidates.push(stem.slice(0, -1))
       }
     }
+    // -ier 已被规则8处理
   }
 
-  // 9. -est → remove / -e  (biggest→big, latest→late)
-  if (word.endsWith('est') && word.length > 5) {
+  // 11. -est → remove / -e  (biggest→big, latest→late)
+  if (word.endsWith('est') && !word.endsWith('iest') && word.length > 5) {
     const stem = word.slice(0, -3)
     candidates.push(stem)
     candidates.push(stem + 'e')
@@ -226,9 +323,10 @@ function ruleBasedCandidates(word) {
         candidates.push(stem.slice(0, -1))
       }
     }
+    // -iest 已被规则9处理
   }
 
-  // 10. -ly → remove  (quickly→quick, happily→happy)
+  // 12. -ly → remove  (quickly→quick, happily→happy)
   if (word.endsWith('ly') && word.length > 4) {
     const stem = word.slice(0, -2)
     candidates.push(stem)
@@ -266,6 +364,11 @@ export function lemmatize(word) {
     const base = IRREGULAR[w]
     if (!candidates.includes(base)) {
       candidates.push(base)
+    }
+    // 一词多源：查是否有次级原形（如 better → good 之后也尝试 well）
+    const secondary = SECONDARY_IRREGULAR[w]
+    if (secondary && !candidates.includes(secondary)) {
+      candidates.push(secondary)
     }
   }
 

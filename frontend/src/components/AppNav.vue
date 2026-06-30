@@ -121,15 +121,15 @@
         <!-- 头像 -->
         <router-link
           to="/profile"
-          class="w-10 h-10 rounded-full border-2 border-white overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#2563EB] transition-all"
+          class="w-10 h-10 rounded-xl border-2 border-white overflow-hidden cursor-pointer hover:ring-2 hover:ring-[#2563EB] transition-all"
         >
           <img
             v-if="navAvatarSrc"
             :src="navAvatarSrc"
             alt="头像"
-            class="w-full h-full object-cover rounded-full"
+            class="w-full h-full object-cover rounded-xl"
           />
-          <div v-else class="w-full h-full rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+          <div v-else class="w-full h-full rounded-xl bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
             {{ avatarLetter }}
           </div>
         </router-link>

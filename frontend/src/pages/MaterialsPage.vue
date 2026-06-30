@@ -156,7 +156,7 @@ import { useTaskStore } from '@/stores/task'
 import { useUserStore } from '@/stores/user'
 import ArticleCard from '@/components/ArticleCard.vue'
 import request from '@/utils/request'
-import { getRecentHistory, relativeTime } from '@/utils/historyDB'
+import { getRecentHistory, relativeTime, getReadArticleIds } from '@/utils/historyDB'
 import { useRequireAuth } from '@/composables/useAuth'
 
 const router = useRouter()
@@ -176,6 +176,7 @@ const activeCategory = ref('advanced')
 const articles = ref([])
 const loadingArticles = ref(true)
 const historyItems = ref([])
+const readArticleIds = ref(new Set())
 
 // 用户水平
 const userLevel = computed(() => {
@@ -223,10 +224,12 @@ const DIFFICULTY_LABEL = {
   '日常': '日常',
 }
 
-// 按分类过滤文章
+// 按分类过滤文章，同时排除已读文章
 const filteredArticles = computed(() => {
   if (articles.value.length === 0) return articles.value
-  return articles.value.filter(a => a.category === activeCategory.value)
+  return articles.value.filter(a =>
+    a.category === activeCategory.value && !readArticleIds.value.has(Number(a.id))
+  )
 })
 
 // 跳转到阅读器
@@ -339,10 +342,16 @@ async function fetchHistory() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 所有数据并行加载，不阻塞页面渲染
   fetchArticles()
   taskStore.initDailyTasks()
   fetchHistory()
+  // 加载已读文章 ID 用于过滤
+  try {
+    readArticleIds.value = await getReadArticleIds()
+  } catch (e) {
+    console.warn('加载已读文章ID失败:', e)
+  }
 })
 </script>

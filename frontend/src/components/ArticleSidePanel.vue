@@ -164,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useUserStore } from '@/stores/user'
 import { useReaderStore } from '@/stores/reader'
@@ -254,6 +254,8 @@ async function lookupCultureWord(word) {
   wordPopover.loading = false
 }
 
+const emit = defineEmits(['quiz-completed'])
+
 const expandedNotes = ref(new Set())
 const showZh = ref(new Set())
 const userAnswers = ref({}) // { questionIndex: selectedOptionIndex }
@@ -297,4 +299,33 @@ function getOptionClass(qIdx, oIdx) {
   }
   return 'text-gray-400'
 }
+
+// ========== 监听答题完成 ==========
+let quizCompletedEmitted = false
+watch(
+  () => {
+    const questions = props.quizData?.questions
+    if (!questions || questions.length === 0) return false
+    return Object.keys(userAnswers.value).length >= questions.length
+  },
+  (allDone) => {
+    if (allDone && !quizCompletedEmitted) {
+      quizCompletedEmitted = true
+      emit('quiz-completed')
+    }
+  },
+)
+
+// ========== 全局点击关闭单词浮窗 ==========
+function handleGlobalClick() {
+  wordPopover.visible = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick)
+})
 </script>

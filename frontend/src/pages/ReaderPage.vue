@@ -169,7 +169,7 @@
           </div>
         </div>
 
-        <!-- 对照翻译按钮 -->
+        <!-- 段落翻译按钮 -->
         <button
           class="flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all flex-none"
           :class="readerStore.showTranslation
@@ -178,7 +178,7 @@
           @click="guard(readerStore.toggleTranslation)"
         >
           <Icon icon="ph:translate-bold" />
-          对照翻译
+          段落翻译
         </button>
       </div>
     </div>
@@ -220,6 +220,7 @@
       :cultural-notes="readerStore.culturalNotesCache"
       :quiz-data="readerStore.quizCache"
       :position="{ x: sidePanelX, y: 140 }"
+      @quiz-completed="onQuizCompleted"
     />
 
   </div>
@@ -562,6 +563,46 @@ function onBackToSummary() {
   aiDetailWord.value = ''
 }
 
+// ========== 答题完成 → 记录文章已读 ==========
+let fallbackReadTimer = null
+let articleReadRecorded = false
+
+function recordArticleReadOnce() {
+  if (articleReadRecorded) return
+  articleReadRecorded = true
+  if (fallbackReadTimer) {
+    clearTimeout(fallbackReadTimer)
+    fallbackReadTimer = null
+  }
+  const articleId = readerStore.article?.id
+  const difficulty = readerStore.article?.difficulty
+  if (articleId && difficulty) {
+    taskStore.recordArticleRead(articleId, difficulty)
+  }
+}
+
+function onQuizCompleted() {
+  recordArticleReadOnce()
+}
+
+/** 兜底：如果 AI 出题失败/无题目，5秒后自动标记为已读 */
+function scheduleFallbackReadRecord(articleId) {
+  fallbackReadTimer = setTimeout(() => {
+    // 检查 quiz 是否确实没有题目（加载失败/无题目）
+    const quiz = readerStore.quizCache
+    if (quiz && !quiz.loading && (!quiz.questions || quiz.questions.length === 0)) {
+      recordArticleReadOnce()
+    }
+    // 如果 quiz 仍在 loading，再等 10 秒
+    else if (quiz && quiz.loading) {
+      fallbackReadTimer = setTimeout(() => {
+        recordArticleReadOnce()
+      }, 10000)
+    }
+    // 有题目的情况由 onQuizCompleted 处理，这里不做任何事
+  }, 5000)
+}
+
 // ========== 全局点击关闭浮窗 ==========
 function handleGlobalClick() {
   wordPopover.visible = false
@@ -598,22 +639,24 @@ onMounted(async () => {
     addToHistory(articleId, readerStore.article.title).catch(err => {
       console.error('记录浏览历史失败:', err)
     })
-    // 通知任务系统：已阅读一篇文章（用于自动检测阅读类任务完成）
-    taskStore.initDailyTasks()
-    taskStore.recordArticleRead(articleId, readerStore.article.difficulty)
-
     // 后台预取 AI 文化背景分析和阅读理解选择题
     const content = readerStore.article?.content
     if (content) {
       readerStore.prefetchCulturalNotes(articleId, content)
       readerStore.prefetchQuiz(articleId, content)
     }
+
+    // 初始化每日任务，阅读完成标记延迟到答题完成后
+    taskStore.initDailyTasks()
+    // 如果文章没有 quiz 题目（AI 生成失败等），延迟 5 秒后自动标记为已读
+    scheduleFallbackReadRecord(articleId)
   }
   document.addEventListener('click', handleGlobalClick)
   window.addEventListener('scroll', handleScroll)
 })
 
 onUnmounted(() => {
+  if (fallbackReadTimer) clearTimeout(fallbackReadTimer)
   document.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('scroll', handleScroll)
 })
