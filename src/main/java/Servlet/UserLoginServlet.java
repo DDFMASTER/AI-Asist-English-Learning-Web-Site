@@ -7,6 +7,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 
@@ -30,6 +31,21 @@ public class UserLoginServlet extends HttpServlet {
                     JsonUtil.error("用户名或密码错误"));
             return;
         }
+
+        // 创建/获取会话，存储用户登录状态
+        HttpSession session = request.getSession(true);
+        session.setAttribute("userId", user.getUserId());
+        session.setAttribute("username", user.getUsername());
+        session.setAttribute("role", user.getRole());
+        session.setAttribute("studyPurpose", user.getStudyPurpose());
+
+        // 设置会话超时（30 分钟无操作后自动失效）
+        session.setMaxInactiveInterval(30 * 60);
+
+        System.out.println("[AAEL] 用户登录成功: userId=" + user.getUserId()
+                + ", username=" + user.getUsername()
+                + ", role=" + user.getRole()
+                + ", sessionId=" + session.getId());
 
         // 构建成功响应
         String extra = "\"userId\":" + JsonUtil.numVal(user.getUserId())
