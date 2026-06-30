@@ -15,8 +15,10 @@ import java.util.Set;
  *
  * 公开路径（无需登录）：
  *   /api/user/login, /api/user/register, /api/user/logout, /api/connect-test,
- *   /api/word/search, /api/word/lookup,
- *   /api/article/list, /api/article/detail
+ *   /api/word/*（含 search, lookup, ai-examples）,
+ *   /api/article/list, /api/article/detail,
+ *   /api/article/translate-paragraph, /api/article/quiz, /api/article/cultural-notes,
+ *   /api/assessment/*（含 generate, questions, evaluate）
  *
  * 其余 /api/* 路径均需登录后才能访问。
  * 静态资源（非 /api/ 前缀）直接放行。
@@ -39,7 +41,11 @@ public class LoginFilter implements Filter {
     private static final String[] PUBLIC_API_PREFIXES = {
             "/api/word/",
             "/api/article/list",
-            "/api/article/detail"
+            "/api/article/detail",
+            "/api/article/translate-paragraph",
+            "/api/article/quiz",
+            "/api/article/cultural-notes",
+            "/api/assessment/"
     };
 
     @Override
