@@ -163,6 +163,99 @@ public class AIService {
             + "  ]\n"
             + "}";
 
+    // ========== 测评出题（单题快速版本） ==========
+
+    private static final String ASSESSMENT_SINGLE_PROMPT =
+            "You are an English reading assessment creator for Chinese students at the {studyPurpose} level. "
+            + "Generate exactly 1 English reading passage with a comprehension question.\n\n"
+            + "Requirements for the passage:\n"
+            + "1. Length: 80-150 words (5-8 substantive sentences), with rich content and logical structure\n"
+            + "2. Topic: pick from science, history, culture, technology, society, or psychology\n"
+            + "3. Contain subtle ideas, nuanced arguments, or implied meanings — NOT just surface-level facts\n"
+            + "4. Vocabulary and grammar appropriate for {studyPurpose} level Chinese English learners\n\n"
+            + "Requirements for the question:\n"
+            + "1. Must require DEEP COMPREHENSION — inference, author's purpose, tone, implied meaning, or argument analysis\n"
+            + "2. AVOID questions whose answer is directly stated in the passage\n"
+            + "3. All 4 options must be PLAUSIBLE — incorrect options should be tempting misinterpretations\n"
+            + "4. Answer index: 0=A, 1=B, 2=C, 3=D\n"
+            + "5. Brief explanation in English (30-60 words)\n\n"
+            + "Output STRICT JSON (no extra text, no markdown):\n"
+            + "{\"passage\":\"...\",\"question\":\"...\",\"optionA\":\"...\",\"optionB\":\"...\",\"optionC\":\"...\",\"optionD\":\"...\",\"answer\":0,\"explanation\":\"...\"}";
+
+    // ========== 测评出题 ==========
+
+    private static final String ASSESSMENT_GENERATE_PROMPT =
+            "You are an English reading assessment creator for Chinese students at the {studyPurpose} level. "
+            + "Generate exactly 10 English reading passages with comprehension questions.\n\n"
+            + "Requirements for each passage:\n"
+            + "1. Length: 80-150 words (5-8 substantive sentences), with rich content and logical structure\n"
+            + "2. Topics: diverse and engaging — science, history, culture, technology, society, psychology, environment, literature, economics, philosophy\n"
+            + "3. The passage should contain subtle ideas, nuanced arguments, or implied meanings — NOT just surface-level facts\n"
+            + "4. Vocabulary and grammar must be appropriate for {studyPurpose} level Chinese English learners\n\n"
+            + "Requirements for each question:\n"
+            + "1. Questions must require DEEP COMPREHENSION — inference, author's purpose, tone, implied meaning, text structure, argument analysis\n"
+            + "2. AVOID questions whose answer is directly stated in the passage\n"
+            + "3. All 4 options must be PLAUSIBLE and GRAMMATICALLY CORRECT — a student who didn't read carefully should find all options tempting\n"
+            + "4. The 3 incorrect options (distractors) must each be based on:\n"
+            + "   - A common misinterpretation of the passage\n"
+            + "   - A plausible but wrong inference\n"
+            + "   - An idea that seems right but contradicts a subtle detail\n"
+            + "5. Answer index: 0=A, 1=B, 2=C, 3=D\n"
+            + "6. Explanation in English (40-80 words) explaining why the correct answer is right AND why each distractor is wrong\n\n"
+            + "Question types to vary across the 10 questions:\n"
+            + "- Main idea / central argument\n"
+            + "- Author's tone or attitude\n"
+            + "- Inference from implied information\n"
+            + "- Purpose of a specific paragraph or sentence\n"
+            + "- Text structure / logical relationship\n"
+            + "- Vocabulary meaning in context\n\n"
+            + "Output STRICT JSON (no extra text, no markdown):\n"
+            + "{\n"
+            + "  \"questions\":[\n"
+            + "    {\n"
+            + "      \"passage\":\"80-150 word passage text...\",\n"
+            + "      \"question\":\"Which of the following best describes...?\",\n"
+            + "      \"optionA\":\"Plausible but incorrect interpretation\",\n"
+            + "      \"optionB\":\"Another tempting wrong answer\",\n"
+            + "      \"optionC\":\"The correct answer (subtle)\",\n"
+            + "      \"optionD\":\"Also plausible but wrong\",\n"
+            + "      \"answer\":2,\n"
+            + "      \"explanation\":\"C is correct because... A is wrong because... B fails to account for... D contradicts...\"\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+    // ========== 测评评估 ==========
+
+    private static final String ASSESSMENT_EVALUATE_PROMPT =
+            "You are an English proficiency evaluator. You will receive 10 reading comprehension questions "
+            + "with the correct answers, and the student's selected answers.\n\n"
+            + "Evaluate the student's performance and return:\n"
+            + "1. overallScore (0-100): overall reading comprehension score based on correct/incorrect answers\n"
+            + "2. cefrLevel (string): One of A1, A2, B1, B2, C1, C2\n"
+            + "3. dimensions (object): five ability dimension scores (each 0-100)\n"
+            + "   - vocabulary: vocabulary knowledge and word recognition\n"
+            + "   - grammar: grammatical understanding and sentence structure\n"
+            + "   - reading: reading comprehension ability\n"
+            + "   - culture: cultural background knowledge\n"
+            + "   - logic: logical analysis and inference ability\n\n"
+            + "Base your evaluation on:\n"
+            + "- How many questions the student answered correctly vs incorrectly\n"
+            + "- The type of each question (main idea, detail, inference, vocabulary-in-context, tone, etc.)\n"
+            + "- The difficulty of the passages and questions\n\n"
+            + "Output STRICT JSON (no extra text, no markdown):\n"
+            + "{\n"
+            + "  \"overallScore\":68,\n"
+            + "  \"cefrLevel\":\"B1\",\n"
+            + "  \"dimensions\":{\n"
+            + "    \"vocabulary\":68,\n"
+            + "    \"grammar\":72,\n"
+            + "    \"reading\":65,\n"
+            + "    \"culture\":55,\n"
+            + "    \"logic\":70\n"
+            + "  }\n"
+            + "}";
+
     /**
      * 基于文章生成阅读理解选择题。
      * @param articleContent 文章全文
@@ -245,6 +338,206 @@ public class AIService {
 
         result.duration = System.currentTimeMillis() - startTime;
         return result;
+    }
+
+    // ========== 测评出题与评估 ==========
+
+    /**
+     * 快速生成单道测评题（用于首题即时返回）。
+     */
+    public AssessmentQuestion generateSingleQuestion(String studyPurpose) {
+        String prompt = ASSESSMENT_SINGLE_PROMPT.replace("{studyPurpose}", studyPurpose);
+        String userContent = "Generate 1 reading passage for " + studyPurpose + " level.";
+
+        String responseContent = callDeepSeek(prompt, userContent, 20, new AIResultBase());
+
+        if (responseContent != null) {
+            return parseOneQuestion(responseContent);
+        }
+        return null;
+    }
+
+    private AssessmentQuestion parseOneQuestion(String json) {
+        int pos = 0;
+
+        pos = json.indexOf("\"passage\":\"", pos);
+        if (pos == -1) return null;
+        pos += 11;
+        String passage = extractStringValue(json, pos);
+
+        pos = json.indexOf("\"question\":\"", pos);
+        if (pos == -1) return null;
+        pos += 12;
+        String question = extractStringValue(json, pos);
+
+        String[] opts = new String[4];
+        String[] optKeys = {"\"optionA\":\"", "\"optionB\":\"", "\"optionC\":\"", "\"optionD\":\""};
+        for (int i = 0; i < 4; i++) {
+            int optPos = json.indexOf(optKeys[i], pos);
+            if (optPos == -1) return null;
+            optPos += optKeys[i].length();
+            opts[i] = extractStringValue(json, optPos);
+        }
+
+        pos = json.indexOf("\"answer\":", pos);
+        if (pos == -1) return null;
+        pos += 9;
+        int answer = 0;
+        while (pos < json.length() && json.charAt(pos) >= '0' && json.charAt(pos) <= '9') {
+            answer = answer * 10 + (json.charAt(pos) - '0');
+            pos++;
+        }
+
+        pos = json.indexOf("\"explanation\":\"", pos);
+        if (pos == -1) return null;
+        pos += 15;
+        String explanation = extractStringValue(json, pos);
+
+        if (passage != null && question != null && opts[0] != null) {
+            return new AssessmentQuestion(passage, question, opts, answer,
+                    explanation != null ? explanation : "");
+        }
+        return null;
+    }
+
+    /**
+     * 根据学习阶段生成 10 段短文章及对应的阅读理解选择题。
+     * @param studyPurpose 用户学习阶段（初中/高中/四级/六级/考研/托福）
+     * @return AssessmentGenerateResult
+     */
+    public AssessmentGenerateResult generateAssessment(String studyPurpose) {
+        AssessmentGenerateResult result = new AssessmentGenerateResult();
+        long startTime = System.currentTimeMillis();
+
+        String prompt = ASSESSMENT_GENERATE_PROMPT.replace("{studyPurpose}", studyPurpose);
+        String userContent = "Generate 10 short reading passages for " + studyPurpose + " level students.";
+
+        String responseContent = callDeepSeek(prompt, userContent, 60, result);
+
+        if (responseContent != null) {
+            List<AssessmentQuestion> questions = new ArrayList<>();
+            int pos = 0;
+            int qCount = 0;
+            while ((pos = responseContent.indexOf("\"passage\":\"", pos)) != -1 && qCount < 10) {
+                pos += 11;
+                String passage = extractStringValue(responseContent, pos);
+
+                pos = responseContent.indexOf("\"question\":\"", pos);
+                if (pos == -1) break;
+                pos += 12;
+                String question = extractStringValue(responseContent, pos);
+
+                String[] opts = new String[4];
+                String[] optKeys = {"\"optionA\":\"", "\"optionB\":\"", "\"optionC\":\"", "\"optionD\":\""};
+                for (int i = 0; i < 4; i++) {
+                    int optPos = responseContent.indexOf(optKeys[i], pos);
+                    if (optPos == -1) break;
+                    optPos += optKeys[i].length();
+                    opts[i] = extractStringValue(responseContent, optPos);
+                }
+
+                pos = responseContent.indexOf("\"answer\":", pos);
+                if (pos == -1) break;
+                pos += 9;
+                int answer = 0;
+                while (pos < responseContent.length() && responseContent.charAt(pos) >= '0'
+                        && responseContent.charAt(pos) <= '9') {
+                    answer = answer * 10 + (responseContent.charAt(pos) - '0');
+                    pos++;
+                }
+
+                pos = responseContent.indexOf("\"explanation\":\"", pos);
+                if (pos == -1) break;
+                pos += 15;
+                String explanation = extractStringValue(responseContent, pos);
+
+                if (passage != null && question != null && opts[0] != null) {
+                    questions.add(new AssessmentQuestion(
+                            passage, question, opts, answer,
+                            explanation != null ? explanation : ""));
+                    qCount++;
+                }
+            }
+            result.questions = questions.toArray(new AssessmentQuestion[0]);
+
+            if (result.questions.length == 0) {
+                result.error = "AI 返回内容解析失败，未提取到题目";
+            }
+        }
+
+        result.duration = System.currentTimeMillis() - startTime;
+        return result;
+    }
+
+    /**
+     * 根据用户的答题情况评估英语能力，返回分项得分和 CEFR 等级。
+     * @param questionsJson 题目及正确答案的 JSON 字符串
+     * @param answersJson   用户答案的 JSON 字符串
+     * @return AssessmentEvaluateResult
+     */
+    public AssessmentEvaluateResult evaluateAssessment(String questionsJson, String answersJson) {
+        AssessmentEvaluateResult result = new AssessmentEvaluateResult();
+        long startTime = System.currentTimeMillis();
+
+        String userContent = "Questions and correct answers:\n" + questionsJson
+                + "\n\nUser's answers:\n" + answersJson;
+
+        String responseContent = callDeepSeek(ASSESSMENT_EVALUATE_PROMPT, userContent, 30, result);
+
+        if (responseContent != null) {
+            // 提取 overallScore
+            int scorePos = responseContent.indexOf("\"overallScore\":");
+            if (scorePos != -1) {
+                scorePos += 15;
+                result.overallScore = parseIntFromContent(responseContent, scorePos);
+            }
+
+            // 提取 cefrLevel
+            int cefrPos = responseContent.indexOf("\"cefrLevel\":\"");
+            if (cefrPos != -1) {
+                cefrPos += 13;
+                result.cefrLevel = extractStringValue(responseContent, cefrPos);
+            }
+
+            // 提取各维度分数
+            if (responseContent.contains("\"dimensions\":")) {
+                result.vocabulary = extractDimension(responseContent, "vocabulary");
+                result.grammar = extractDimension(responseContent, "grammar");
+                result.reading = extractDimension(responseContent, "reading");
+                result.culture = extractDimension(responseContent, "culture");
+                result.logic = extractDimension(responseContent, "logic");
+            }
+
+            if (result.cefrLevel == null) {
+                result.error = "AI 评估结果解析失败";
+            }
+        }
+
+        result.duration = System.currentTimeMillis() - startTime;
+        return result;
+    }
+
+    /**
+     * 从 JSON 字符串中提取指定键的整数值
+     */
+    private int extractDimension(String content, String key) {
+        String searchKey = "\"" + key + "\":";
+        int pos = content.indexOf(searchKey);
+        if (pos == -1) return 0;
+        pos += searchKey.length();
+        return parseIntFromContent(content, pos);
+    }
+
+    /**
+     * 从指定位置解析整数
+     */
+    private int parseIntFromContent(String s, int pos) {
+        int val = 0;
+        while (pos < s.length() && s.charAt(pos) >= '0' && s.charAt(pos) <= '9') {
+            val = val * 10 + (s.charAt(pos) - '0');
+            pos++;
+        }
+        return val;
     }
 
     // ========== 通用 API 调用 ==========
@@ -795,6 +1088,93 @@ public class AIService {
                         .append("\"");
             }
 
+            sb.append("}");
+            return sb.toString();
+        }
+    }
+
+    // ========== 测评出题结果 ==========
+
+    public static class AssessmentQuestion {
+        public final String passage;
+        public final String question;
+        public final String[] options;
+        public final int answer;
+        public final String explanation;
+
+        public AssessmentQuestion(String passage, String question, String[] options,
+                                   int answer, String explanation) {
+            this.passage = passage;
+            this.question = question;
+            this.options = options;
+            this.answer = answer;
+            this.explanation = explanation;
+        }
+    }
+
+    public static class AssessmentGenerateResult extends AIResultBase {
+        public AssessmentQuestion[] questions;
+
+        public String toJson() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append("\"success\":").append(error == null);
+            sb.append(",\"httpStatus\":").append(httpStatus);
+            sb.append(",\"duration\":").append(duration);
+
+            if (error != null) {
+                sb.append(",\"message\":\"").append(escapeJsonStatic(error)).append("\"");
+            }
+
+            sb.append(",\"questions\":[");
+            if (questions != null) {
+                for (int i = 0; i < questions.length; i++) {
+                    if (i > 0) sb.append(",");
+                    AssessmentQuestion q = questions[i];
+                    sb.append("{");
+                    sb.append("\"passage\":\"").append(escapeJsonStatic(q.passage)).append("\",");
+                    sb.append("\"question\":\"").append(escapeJsonStatic(q.question)).append("\",");
+                    sb.append("\"optionA\":\"").append(escapeJsonStatic(q.options[0])).append("\",");
+                    sb.append("\"optionB\":\"").append(escapeJsonStatic(q.options[1])).append("\",");
+                    sb.append("\"optionC\":\"").append(escapeJsonStatic(q.options[2])).append("\",");
+                    sb.append("\"optionD\":\"").append(escapeJsonStatic(q.options[3])).append("\",");
+                    sb.append("\"answer\":").append(q.answer).append(",");
+                    sb.append("\"explanation\":\"").append(escapeJsonStatic(q.explanation)).append("\"");
+                    sb.append("}");
+                }
+            }
+            sb.append("]}");
+            return sb.toString();
+        }
+    }
+
+    public static class AssessmentEvaluateResult extends AIResultBase {
+        public int overallScore;
+        public String cefrLevel;
+        public int vocabulary;
+        public int grammar;
+        public int reading;
+        public int culture;
+        public int logic;
+
+        public String toJson() {
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append("\"success\":").append(error == null);
+            sb.append(",\"httpStatus\":").append(httpStatus);
+            sb.append(",\"duration\":").append(duration);
+
+            if (error != null) {
+                sb.append(",\"message\":\"").append(escapeJsonStatic(error)).append("\"");
+            }
+
+            sb.append(",\"overallScore\":").append(overallScore);
+            sb.append(",\"cefrLevel\":\"").append(escapeJsonStatic(cefrLevel != null ? cefrLevel : "")).append("\"");
+            sb.append(",\"vocabulary\":").append(vocabulary);
+            sb.append(",\"grammar\":").append(grammar);
+            sb.append(",\"reading\":").append(reading);
+            sb.append(",\"culture\":").append(culture);
+            sb.append(",\"logic\":").append(logic);
             sb.append("}");
             return sb.toString();
         }

@@ -9,20 +9,28 @@ export const useAssessmentStore = defineStore('assessment', () => {
   const currentScreen = ref('start') // 'start' | 'quiz'
   const questions = ref([])
   const currentIndex = ref(0)
-  const answers = ref({})       // { questionId: selectedOption }
-  const comprehensionLevels = ref({}) // { questionId: 'understood' | 'unclear' | 'not-understood' }
+  const answers = ref({})       // { questionId: selectedOptionId }
   const loading = ref(false)
+  const assessmentResult = ref(null) // 评估结果，供 ResultPage 使用
+  const sessionId = ref('')          // 后台生成的会话 ID，用于轮询
+  const totalTarget = ref(10)        // 目标总题数
+  let pollTimer = null               // 轮询定时器
 
   // ========== 计算属性 ==========
   const currentQuestion = computed(() =>
     questions.value[currentIndex.value] || null
   )
 
+  // 是否所有题目都已生成完毕
+  const allQuestionsReady = computed(() =>
+    questions.value.length >= totalTarget.value
+  )
+
   const totalQuestions = computed(() => questions.value.length)
 
   const progressPercent = computed(() => {
-    if (totalQuestions.value === 0) return 0
-    return Math.round(((currentIndex.value + 1) / totalQuestions.value) * 100)
+    if (totalTarget.value === 0) return 0
+    return Math.round(((currentIndex.value + 1) / totalTarget.value) * 100)
   })
 
   const isFirstQuestion = computed(() => currentIndex.value === 0)
@@ -35,33 +43,97 @@ export const useAssessmentStore = defineStore('assessment', () => {
     return answers.value[currentQuestion.value.id] || null
   })
 
-  const currentComprehension = computed(() => {
-    if (!currentQuestion.value) return null
-    return comprehensionLevels.value[currentQuestion.value.id] || null
-  })
-
   // ========== 动作 ==========
 
   /**
-   * 开始测评，获取试卷
+   * 开始测评：获取首题（快速），剩余题目后台生成并轮询拉取。
    */
   async function startAssessment() {
     loading.value = true
+    assessmentResult.value = null
+    stopPolling()
     try {
-      const data = await request.get('/assessment/start')
-      if (data.success) {
-        questions.value = data.questions || []
+      const { useUserStore } = await import('@/stores/user')
+      const userStore = useUserStore()
+      const studyPurpose = userStore.user?.studyPurpose || '四级'
+
+      const data = await request.post('/assessment/generate',
+        { studyPurpose },
+        { timeout: 30000 }  // 首题生成约 15-20s
+      )
+
+      if (!data.success || !data.questions || data.questions.length === 0) {
+        throw new Error(data.message || '生成测评题目失败')
       }
-    } catch {
-      // 后端未就绪时使用 mock 数据
-      questions.value = generateMockQuestions()
+
+      sessionId.value = data.sessionId || ''
+      totalTarget.value = data.totalTarget || 10
+      questions.value = transformQuestions(data.questions)
+
+      // 如果首题拿到但总数不足，启动轮询
+      if (sessionId.value && questions.value.length < totalTarget.value) {
+        startPolling()
+      }
+    } catch (err) {
+      console.error('生成测评失败:', err)
+      throw err
     } finally {
       loading.value = false
     }
     currentScreen.value = 'quiz'
     currentIndex.value = 0
     answers.value = {}
-    comprehensionLevels.value = {}
+    saveProgress()
+  }
+
+  /** 将后端题目格式转为前端格式 */
+  function transformQuestions(rawQuestions) {
+    return rawQuestions.map((q, i) => ({
+      id: i + 1,
+      passage: q.passage || '',
+      question: q.question || '',
+      options: [
+        { id: 'A', text: q.optionA || '' },
+        { id: 'B', text: q.optionB || '' },
+        { id: 'C', text: q.optionC || '' },
+        { id: 'D', text: q.optionD || '' },
+      ],
+      correctAnswer: q.answer,
+      explanation: q.explanation || '',
+    }))
+  }
+
+  /** 轮询获取后台生成的剩余题目 */
+  function startPolling() {
+    stopPolling()
+    pollTimer = setInterval(async () => {
+      try {
+        const data = await request.get('/assessment/questions', {
+          params: { sessionId: sessionId.value },
+        })
+        if (!data.success) return
+
+        const newQuestions = data.questions || []
+        if (newQuestions.length > questions.value.length) {
+          // 重新编号（保持连续性）
+          questions.value = transformQuestions(newQuestions)
+          saveProgress()
+        }
+
+        if (data.complete || questions.value.length >= totalTarget.value) {
+          stopPolling()
+        }
+      } catch {
+        // 轮询失败静默重试
+      }
+    }, 3000)  // 每 3 秒轮询一次
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
   }
 
   /**
@@ -77,34 +149,9 @@ export const useAssessmentStore = defineStore('assessment', () => {
   }
 
   /**
-   * 标记理解程度
-   */
-  function markComprehension(level) {
-    if (!currentQuestion.value) return
-    comprehensionLevels.value = {
-      ...comprehensionLevels.value,
-      [currentQuestion.value.id]: level,
-    }
-    saveProgress()
-  }
-
-  /**
-   * 上一题
-   */
-  function prevQuestion() {
-    if (currentIndex.value > 0) {
-      currentIndex.value--
-      saveProgress()
-    }
-  }
-
-  /**
-   * 下一题（最后一题时提交）
+   * 下一题
    */
   function nextQuestion() {
-    if (isLastQuestion.value) {
-      return submitAssessment()
-    }
     if (currentIndex.value < totalQuestions.value - 1) {
       currentIndex.value++
       saveProgress()
@@ -112,39 +159,90 @@ export const useAssessmentStore = defineStore('assessment', () => {
   }
 
   /**
-   * 提交测评结果
+   * 提交测评结果（AI 评估）
    */
   async function submitAssessment() {
     loading.value = true
     try {
+      // 构造提交载荷：题目 + 用户答案
       const payload = {
-        answers: answers.value,
-        comprehensionLevels: comprehensionLevels.value,
+        questions: questions.value.map(q => ({
+          passage: q.passage,
+          question: q.question,
+          optionA: q.options[0]?.text || '',
+          optionB: q.options[1]?.text || '',
+          optionC: q.options[2]?.text || '',
+          optionD: q.options[3]?.text || '',
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation || '',
+        })),
+        answers: questions.value.reduce((acc, q) => {
+          const selected = answers.value[q.id]
+          if (selected) acc[q.id] = selected
+          return acc
+        }, {}),
       }
-      const data = await request.post('/assessment/submit', payload)
-      if (data && data.success) {
-        clearProgress()
+
+      const data = await request.post('/assessment/evaluate',
+        payload,
+        { timeout: 45000 }
+      )
+
+      if (!data.success) {
+        throw new Error(data.message || '评估失败')
       }
-      return data
+
+      // 存储评估结果供 ResultPage 使用
+      assessmentResult.value = {
+        level: data.cefrLevel || 'A1',
+        nextLevel: getNextLevel(data.cefrLevel),
+        score: data.overallScore || 0,
+        dimensions: {
+          vocabulary: data.vocabulary || 0,
+          grammar: data.grammar || 0,
+          reading: data.reading || 0,
+          culture: data.culture || 0,
+          logic: data.logic || 0,
+        },
+      }
+
+      clearProgress()
+      return { success: true, result: assessmentResult.value }
     } catch (error) {
       console.error('提交测评失败:', error)
-      // 即使失败也返回 mock 结果用于 demo
-      clearProgress()
-      return { success: true, result: {} }
+      return { success: false, error: error.message }
     } finally {
       loading.value = false
     }
   }
 
   /**
-   * 退出测评(重置)
+   * 退出测评（重置）
    */
   function resetAssessment() {
     currentScreen.value = 'start'
     questions.value = []
     currentIndex.value = 0
     answers.value = {}
-    comprehensionLevels.value = {}
+    sessionId.value = ''
+    stopPolling()
+  }
+
+  /**
+   * 获取评估结果
+   */
+  function getResult() {
+    return assessmentResult.value
+  }
+
+  // ========== 辅助函数 ==========
+
+  /** 根据当前 CEFR 等级推算下一阶段 */
+  function getNextLevel(level) {
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    const idx = levels.indexOf(level)
+    if (idx >= 0 && idx < levels.length - 1) return levels[idx + 1]
+    return level
   }
 
   // ========== 进度持久化 ==========
@@ -155,7 +253,8 @@ export const useAssessmentStore = defineStore('assessment', () => {
         questions: questions.value,
         currentIndex: currentIndex.value,
         answers: answers.value,
-        comprehensionLevels: comprehensionLevels.value,
+        sessionId: sessionId.value,
+        totalTarget: totalTarget.value,
       }
       localStorage.setItem(PROGRESS_KEY, JSON.stringify(data))
     } catch {
@@ -168,7 +267,6 @@ export const useAssessmentStore = defineStore('assessment', () => {
       const raw = localStorage.getItem(PROGRESS_KEY)
       if (!raw) return null
       const data = JSON.parse(raw)
-      // 校验数据完整性
       if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
         return null
       }
@@ -184,31 +282,20 @@ export const useAssessmentStore = defineStore('assessment', () => {
     } catch {
       // 静默失败
     }
+    // 注意：不在此处清除 assessmentResult，ResultPage 需要在导航后读取
   }
 
   function restoreProgress(data) {
-    questions.value = data.questions
+    questions.value = data.questions || []
     currentIndex.value = data.currentIndex || 0
     answers.value = data.answers || {}
-    comprehensionLevels.value = data.comprehensionLevels || {}
+    sessionId.value = data.sessionId || ''
+    totalTarget.value = data.totalTarget || 10
     currentScreen.value = 'quiz'
-  }
-
-  // ========== Mock 数据生成 ==========
-  function generateMockQuestions() {
-    return Array.from({ length: 10 }, (_, i) => ({
-      id: i + 1,
-      passage: 'The concept of "Smart Cities" has gained significant momentum over the past decade. By leveraging Internet of Things (IoT) technologies, urban centers can now monitor traffic patterns, energy consumption, and public safety in real-time. However, the implementation of such systems is not without controversy. Critics argue that the pervasive nature of sensors and cameras raises serious concerns regarding citizen privacy and data security.',
-      question: i === 0
-        ? 'What is the primary concern raised by critics of Smart Cities?'
-        : `Sample question ${i + 1} about the passage?`,
-      options: [
-        { id: 'A', text: i === 0 ? 'The high cost of implementation' : 'Option A' },
-        { id: 'B', text: i === 0 ? 'Privacy and data security issues' : 'Option B' },
-        { id: 'C', text: i === 0 ? 'Inefficient traffic monitoring' : 'Option C' },
-        { id: 'D', text: i === 0 ? 'Lack of IoT infrastructure' : 'Option D' },
-      ],
-    }))
+    // 恢复后如果题目数不足且 sessionId 有效，继续轮询
+    if (sessionId.value && questions.value.length < totalTarget.value) {
+      startPolling()
+    }
   }
 
   return {
@@ -216,22 +303,23 @@ export const useAssessmentStore = defineStore('assessment', () => {
     questions,
     currentIndex,
     answers,
-    comprehensionLevels,
     loading,
+    assessmentResult,
+    sessionId,
+    totalTarget,
+    allQuestionsReady,
     currentQuestion,
     totalQuestions,
     progressPercent,
     isFirstQuestion,
     isLastQuestion,
     selectedOption,
-    currentComprehension,
     startAssessment,
     selectOption,
-    markComprehension,
-    prevQuestion,
     nextQuestion,
     submitAssessment,
     resetAssessment,
+    getResult,
     saveProgress,
     loadProgress,
     clearProgress,

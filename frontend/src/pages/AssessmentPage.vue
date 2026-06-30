@@ -48,11 +48,27 @@
       <!-- 无进度时的开始按钮 -->
       <button
         v-else
-        class="px-12 py-4 bg-[#2563EB] text-white rounded-2xl text-lg font-bold shadow-xl shadow-blue-200 hover:scale-105 transition-transform"
+        class="px-12 py-4 bg-[#2563EB] text-white rounded-2xl text-lg font-bold shadow-xl shadow-blue-200 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-wait"
+        :disabled="store.loading"
         @click="handleStart"
       >
-        开始测评
+        <Icon v-if="store.loading" icon="ph:spinner-bold" class="inline animate-spin mr-2" />
+        {{ store.loading ? '正在生成题目...' : '开始测评' }}
       </button>
+
+      <!-- 错误提示 -->
+      <div v-if="error" class="mt-6">
+        <div class="inline-flex items-center gap-2 px-5 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
+          <Icon icon="ph:warning-circle-bold" class="text-lg" />
+          <span>{{ error }}</span>
+        </div>
+        <button
+          class="ml-4 px-6 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-colors"
+          @click="handleStart"
+        >
+          重试
+        </button>
+      </div>
     </div>
 
     <!-- ========== 状态 2: 答题屏幕 ========== -->
@@ -63,7 +79,11 @@
           <span class="text-2xl font-bold text-[#2563EB]">
             {{ String(store.currentIndex + 1).padStart(2, '0') }}
           </span>
-          <span class="text-gray-300 font-bold">/ {{ store.totalQuestions }}</span>
+          <span class="text-gray-300 font-bold">/ {{ store.totalTarget }}</span>
+        </div>
+        <div v-if="!store.allQuestionsReady" class="flex items-center gap-1.5 ml-3">
+          <Icon icon="ph:spinner-bold" class="text-[11px] text-amber-500 animate-spin" />
+          <span class="text-[11px] text-amber-500">正在生成剩余题目...</span>
         </div>
         <div class="flex-1 max-w-md h-2 bg-gray-100 rounded-full mx-8 overflow-hidden">
           <div
@@ -124,62 +144,24 @@
             </div>
           </div>
 
-          <!-- 理解程度标记 -->
-          <div class="card !bg-[#F8F7F4]">
-            <h4 class="text-sm font-bold mb-4 text-center">你对这段内容的理解程度？</h4>
-            <div class="flex gap-3">
-              <button
-                class="mark-btn flex-1 py-3 rounded-xl flex flex-col items-center gap-1 border transition-all"
-                :class="store.currentComprehension === 'understood'
-                  ? 'mark-active-green border-transparent'
-                  : 'bg-white border-gray-200'"
-                @click="store.markComprehension('understood')"
-              >
-                <Icon icon="ph:check-circle-bold" class="text-xl" :class="store.currentComprehension === 'understood' ? 'text-white' : 'text-green-500'" />
-                <span class="text-[10px] font-bold" :class="store.currentComprehension === 'understood' ? 'text-white' : 'text-gray-500'">看得懂</span>
-              </button>
-              <button
-                class="mark-btn flex-1 py-3 rounded-xl flex flex-col items-center gap-1 border transition-all"
-                :class="store.currentComprehension === 'unclear'
-                  ? 'mark-active-yellow border-transparent'
-                  : 'bg-white border-gray-200'"
-                @click="store.markComprehension('unclear')"
-              >
-                <Icon icon="ph:question-bold" class="text-xl" :class="store.currentComprehension === 'unclear' ? 'text-white' : 'text-yellow-500'" />
-                <span class="text-[10px] font-bold" :class="store.currentComprehension === 'unclear' ? 'text-white' : 'text-gray-500'">模糊</span>
-              </button>
-              <button
-                class="mark-btn flex-1 py-3 rounded-xl flex flex-col items-center gap-1 border transition-all"
-                :class="store.currentComprehension === 'not-understood'
-                  ? 'mark-active-red border-transparent'
-                  : 'bg-white border-gray-200'"
-                @click="store.markComprehension('not-understood')"
-              >
-                <Icon icon="ph:x-circle-bold" class="text-xl" :class="store.currentComprehension === 'not-understood' ? 'text-white' : 'text-red-500'" />
-                <span class="text-[10px] font-bold" :class="store.currentComprehension === 'not-understood' ? 'text-white' : 'text-gray-500'">看不懂</span>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
       <!-- 底部导航 -->
       <div class="mt-12 flex justify-between items-center">
-        <button
-          class="px-8 py-3 font-bold transition-colors"
-          :class="store.isFirstQuestion ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600'"
-          :disabled="store.isFirstQuestion"
-          @click="store.prevQuestion()"
-        >
-          ← 上一题
-        </button>
+        <div></div>
         <div class="flex items-center gap-4">
           <span class="text-sm text-gray-400">已自动保存进度</span>
           <button
-            class="px-10 py-3 bg-[#2563EB] text-white rounded-xl font-bold shadow-lg shadow-blue-100 hover:scale-105 transition-transform"
+            class="px-10 py-3 rounded-xl font-bold shadow-lg transition-all"
+            :class="store.selectedOption && !submitting
+              ? 'bg-[#2563EB] text-white shadow-blue-100 hover:scale-105'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed'"
+            :disabled="!store.selectedOption || submitting"
             @click="handleNext"
           >
-            {{ store.isLastQuestion ? '查看结果' : '下一题' }}
+            <Icon v-if="submitting" icon="ph:spinner-bold" class="inline animate-spin mr-1.5" />
+            {{ submitting ? 'AI 正在分析评估...' : (store.allQuestionsReady && store.isLastQuestion ? '查看结果' : '下一题') }}
           </button>
         </div>
       </div>
@@ -240,11 +222,18 @@ const router = useRouter()
 
 const showExitConfirm = ref(false)
 const savedProgress = ref(null)
+const error = ref('')
+const submitting = ref(false)
 
 async function handleStart() {
+  error.value = ''
   store.clearProgress()
   savedProgress.value = null
-  await store.startAssessment()
+  try {
+    await store.startAssessment()
+  } catch (err) {
+    error.value = err.message || '生成测评题目失败，请稍后重试'
+  }
 }
 
 function handleResume() {
@@ -256,11 +245,16 @@ function handleResume() {
 }
 
 async function handleNext() {
-  if (store.isLastQuestion) {
+  if (store.allQuestionsReady && store.isLastQuestion) {
+    if (submitting.value) return
+    submitting.value = true
     const result = await store.submitAssessment()
     if (result && result.success) {
       router.push('/result')
+    } else if (result && !result.success) {
+      error.value = result.error || '评估失败，请稍后重试'
     }
+    submitting.value = false
   } else {
     store.nextQuestion()
   }

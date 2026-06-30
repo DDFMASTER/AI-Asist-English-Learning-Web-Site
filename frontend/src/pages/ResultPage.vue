@@ -13,7 +13,7 @@
                 cx="80" cy="80" fill="transparent" r="72"
                 stroke="#2563EB" stroke-width="12"
                 :stroke-dasharray="452"
-                :stroke-dashoffset="144"
+                :stroke-dashoffset="ringOffset"
                 stroke-linecap="round"
               />
             </svg>
@@ -33,7 +33,7 @@
           </div>
           <h1 class="text-3xl font-bold mb-4">恭喜！你已成功晋级 {{ result.nextLevel }} 阶段</h1>
           <p class="text-gray-500 leading-relaxed mb-8">
-            AI 分析显示，你在阅读理解和逻辑分析方面表现优异，但在复杂长难句的语法拆解及文化背景知识上仍有提升空间。我们已为你定制了下一阶段的学习计划。
+            根据你的答题表现，AI 系统从词汇、语法、阅读理解、文化背景和逻辑分析五个维度评估了你的英语能力。继续加油，下一阶段目标是 {{ result.nextLevel }}！
           </p>
           <div class="flex items-center gap-4">
             <router-link
@@ -83,25 +83,45 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as echarts from 'echarts'
+import { useAssessmentStore } from '@/stores/assessment'
+
+const router = useRouter()
+const assessmentStore = useAssessmentStore()
+const storeResult = assessmentStore.assessmentResult
+
+// 无结果时重定向
+if (!storeResult) {
+  router.replace('/assessment')
+}
 
 // ========== 结果数据 ==========
 const result = reactive({
-  level: 'B1',
-  nextLevel: 'B2',
-  score: 68,
+  level: storeResult?.level || 'A1',
+  nextLevel: storeResult?.nextLevel || 'A2',
+  score: storeResult?.score || 0,
 })
 
-// 分项能力详情
-const abilityDetails = ref([
-  { label: '词汇量 (Vocabulary)', percent: 68, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
-  { label: '语法掌握度 (Grammar)', percent: 72, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
-  { label: '阅读理解 (Reading)', percent: 65, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
-  { label: '文化背景 (Culture)', percent: 55, colorClass: 'text-[#F59E0B]', barClass: 'bg-[#F59E0B]' },
-  { label: '逻辑分析 (Logic)', percent: 70, colorClass: 'text-[#10B981]', barClass: 'bg-[#10B981]' },
-])
+// 分项能力详情（从 store 动态读取）
+const abilityDetails = computed(() => {
+  const dims = storeResult?.dimensions || {}
+  return [
+    { label: '词汇量 (Vocabulary)', percent: dims.vocabulary || 0, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
+    { label: '语法掌握度 (Grammar)', percent: dims.grammar || 0, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
+    { label: '阅读理解 (Reading)', percent: dims.reading || 0, colorClass: 'text-[#2563EB]', barClass: 'bg-[#2563EB]' },
+    { label: '文化背景 (Culture)', percent: dims.culture || 0, colorClass: 'text-[#F59E0B]', barClass: 'bg-[#F59E0B]' },
+    { label: '逻辑分析 (Logic)', percent: dims.logic || 0, colorClass: 'text-[#10B981]', barClass: 'bg-[#10B981]' },
+  ]
+})
+
+// 环形进度条的 stroke-dashoffset 动态计算
+const ringOffset = computed(() => {
+  const circumference = 452 // 2 * PI * 72 ≈ 452
+  return circumference - (circumference * result.score / 100)
+})
 
 // ========== ECharts 雷达图 ==========
 const radarChartRef = ref(null)
@@ -110,6 +130,7 @@ let radarChart = null
 function initRadarChart() {
   if (!radarChartRef.value) return
   radarChart = echarts.init(radarChartRef.value)
+  const dims = storeResult?.dimensions || {}
   const option = {
     radar: {
       indicator: [
@@ -126,7 +147,13 @@ function initRadarChart() {
     series: [{
       type: 'radar',
       data: [{
-        value: [68, 72, 65, 55, 70],
+        value: [
+          dims.vocabulary || 0,
+          dims.grammar || 0,
+          dims.reading || 0,
+          dims.culture || 0,
+          dims.logic || 0,
+        ],
         name: '能力评估',
         itemStyle: { color: '#2563EB' },
         areaStyle: { color: 'rgba(37, 99, 235, 0.2)' },
@@ -142,7 +169,6 @@ function handleResize() {
   if (radarChart) radarChart.resize()
 }
 
-// ========== 操作方法 ==========
 onMounted(async () => {
   await nextTick()
   initRadarChart()
