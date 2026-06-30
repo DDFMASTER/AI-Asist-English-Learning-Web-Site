@@ -220,12 +220,14 @@ export const useReaderStore = defineStore('reader', () => {
   /**
    * 跨全部词库查词，支持词形还原。
    * 先精确匹配，未命中则对单词做 lemmatize 后用候选原形再查。
+   * @param {string} word 要查询的单词
+   * @param {string} [studyPurpose] 用户学习阶段，用于过滤词书结果
    */
-  async function lookupWord(word) {
+  async function lookupWord(word, studyPurpose) {
     const w = word.toLowerCase().trim()
 
     // 1. 精确匹配：先查后端，再查本地
-    const exact = await tryLookup(w)
+    const exact = await tryLookup(w, studyPurpose)
     if (exact && exact.found) return exact
 
     // 2. 词形还原：生成候选原形列表，逐个尝试
@@ -234,7 +236,7 @@ export const useReaderStore = defineStore('reader', () => {
     for (let i = 1; i < candidates.length; i++) {
       const candidate = candidates[i]
       if (candidate === w) continue
-      const result = await tryLookup(candidate)
+      const result = await tryLookup(candidate, studyPurpose)
       if (result && result.found) {
         // 标注是通过词形还原找到的
         result.lemmaFrom = w
@@ -248,20 +250,22 @@ export const useReaderStore = defineStore('reader', () => {
   }
 
   /** 尝试查词：先后端 API，再本地 mock */
-  async function tryLookup(w) {
+  async function tryLookup(w, studyPurpose) {
     try {
-      const data = await request.get('/word/lookup', {
-        params: { word: w },
-      })
+      const params = { word: w }
+      if (studyPurpose) {
+        params.studyPurpose = studyPurpose
+      }
+      const data = await request.get('/word/lookup', { params })
       if (data.success) return data
     } catch (error) {
       // 后端不可用，继续尝试本地
     }
-    return getMockWordResult(w)
+    return getMockWordResult(w, studyPurpose)
   }
 
   /** 本地 mock 词库，后端不可用时的后备 */
-  function getMockWordResult(word) {
+  function getMockWordResult(word, studyPurpose) {
     const MOCK_DICT = {
       'hydrogen': { phonetic: '/ˈhaɪdrədʒən/', translations: { '四级': ['氢'], '六级': ['氢'], '考研': ['氢'], '托福': ['氢'] } },
       'revolution': { phonetic: '/ˌrevəˈluːʃn/', translations: { '初中': ['革命'], '高中': ['革命'], '四级': ['革命；重大变革'], '六级': ['革命；旋转'], '考研': ['革命；变革'], '托福': ['revolution'] } },
@@ -349,9 +353,19 @@ export const useReaderStore = defineStore('reader', () => {
       return { success: true, word, found: false, results: [] }
     }
 
-    const results = Object.entries(entry.translations).map(([source, translations]) => ({
+    // 如果指定了学习阶段，只保留匹配阶段的释义
+    let translations = entry.translations
+    if (studyPurpose) {
+      const filtered = {}
+      if (translations[studyPurpose]) {
+        filtered[studyPurpose] = translations[studyPurpose]
+      }
+      translations = filtered
+    }
+
+    const results = Object.entries(translations).map(([source, trans]) => ({
       source,
-      entries: translations.map((t, i) => ({
+      entries: trans.map((t, i) => ({
         id: i + 1,
         word,
         phonetic: entry.phonetic || '',
@@ -363,7 +377,7 @@ export const useReaderStore = defineStore('reader', () => {
       success: true,
       word,
       phonetic: entry.phonetic || '',
-      found: true,
+      found: Object.keys(translations).length > 0,
       results,
     }
   }

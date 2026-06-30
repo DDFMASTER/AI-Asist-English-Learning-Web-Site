@@ -5,6 +5,7 @@ import DAO.WordDAOImpl;
 import Entities.AiWordDic;
 import Entities.WordBase;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -97,6 +98,50 @@ public class WordService {
         }
 
         result.found = !allResults.isEmpty();
+        return result;
+    }
+
+    /**
+     * 按用户学习阶段查词（用于阅读器中点击单词时按 study_purpose 过滤）。
+     * 只查询匹配阶段的词库表，仅展示当前学习阶段的释义。
+     *
+     * @param word         单词
+     * @param studyPurpose 用户学习阶段（初中/高中/四级/六级/考研/托福）
+     * @return 仅包含匹配阶段释义的查词结果
+     */
+    public WordLookupResult lookupWordByStage(String word, String studyPurpose) {
+        WordLookupResult result = new WordLookupResult();
+        result.word = word;
+
+        if (word == null || word.isBlank()) {
+            result.error = "参数无效";
+            return result;
+        }
+
+        if (studyPurpose == null || studyPurpose.isBlank()) {
+            // 未指定学习阶段时，回退到全词库查询
+            return lookupWordInAllStages(word);
+        }
+
+        // 只查询匹配阶段的词库表
+        List<WordBase> stageResults = wordDAO.findByWordAndStage(word, studyPurpose);
+
+        if (!stageResults.isEmpty()) {
+            Map<String, List<WordBase>> grouped = new LinkedHashMap<>();
+            grouped.put(studyPurpose, stageResults);
+            result.stageResults = grouped;
+            result.found = true;
+
+            // 提取音标
+            String ph = stageResults.get(0).getPhonetic();
+            if (ph != null && !ph.isBlank()) {
+                result.phonetic = ph;
+            }
+        } else {
+            result.stageResults = new LinkedHashMap<>();
+            result.found = false;
+        }
+
         return result;
     }
 

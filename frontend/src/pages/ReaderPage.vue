@@ -231,6 +231,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import { useReaderStore } from '@/stores/reader'
 import { useTaskStore } from '@/stores/task'
+import { useUserStore } from '@/stores/user'
 import WordPopover from '@/components/WordPopover.vue'
 import CulturePopover from '@/components/CulturePopover.vue'
 import ArticleSidePanel from '@/components/ArticleSidePanel.vue'
@@ -242,6 +243,7 @@ const route = useRoute()
 const router = useRouter()
 const readerStore = useReaderStore()
 const taskStore = useTaskStore()
+const userStore = useUserStore()
 const { guard } = useRequireAuth()
 
 // ========== 单词分词 ==========
@@ -411,7 +413,8 @@ function handleWordClick(wordData, event) {
 }
 
 async function lookupWordForPopover(word) {
-  const result = await readerStore.lookupWord(word)
+  const studyPurpose = userStore.user?.studyPurpose || ''
+  const result = await readerStore.lookupWord(word, studyPurpose)
 
   // 竞态保护：弹窗已被其他单词覆盖则忽略
   if (wordPopover.word.word.toLowerCase() !== word.toLowerCase()) {

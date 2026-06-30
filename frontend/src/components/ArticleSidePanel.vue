@@ -48,7 +48,16 @@
             />
           </button>
           <div v-if="expandedNotes.has(idx)" class="px-3 py-2 bg-white">
-            <p class="text-xs text-gray-700 leading-relaxed">{{ note.content }}</p>
+            <p class="text-xs text-gray-700 leading-relaxed">
+              <template v-for="(seg, sIdx) in tokenizeText(note.content)" :key="sIdx">
+                <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+                <span
+                  v-else-if="seg.type === 'word'"
+                  class="interactive-word text-gray-900"
+                  @click.stop="(e) => handleCultureWordClick(seg.data, e)"
+                >{{ seg.data.word }}</span>
+              </template>
+            </p>
             <!-- 点击查看中文翻译 -->
             <button
               v-if="note.zh"
@@ -142,12 +151,24 @@
         </p>
       </div>
     </div>
+
+    <!-- 单词查词浮窗 -->
+    <WordPopover
+      :visible="wordPopover.visible"
+      :word="wordPopover.word"
+      :loading="wordPopover.loading"
+      :position="wordPopover.position"
+      @close="wordPopover.visible = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { Icon } from '@iconify/vue'
+import { useUserStore } from '@/stores/user'
+import { useReaderStore } from '@/stores/reader'
+import WordPopover from '@/components/WordPopover.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: true },
@@ -158,6 +179,79 @@ const props = defineProps({
     default: () => ({ x: 20, y: 140 }),
   },
 })
+
+const userStore = useUserStore()
+const readerStore = useReaderStore()
+
+// ========== 单词分词（用于文化背景内容中的单词点击查词） ==========
+function tokenizeText(text) {
+  const segments = []
+  const wordRe = /([a-zA-Z]+(?:['-][a-zA-Z]+)*)/g
+  let lastIdx = 0
+  let match
+
+  while ((match = wordRe.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      segments.push({ type: 'text', text: text.slice(lastIdx, match.index) })
+    }
+    segments.push({
+      type: 'word',
+      text: match[0],
+      data: { word: match[0] },
+    })
+    lastIdx = match.index + match[0].length
+  }
+  if (lastIdx < text.length) {
+    segments.push({ type: 'text', text: text.slice(lastIdx) })
+  }
+  return segments
+}
+
+// ========== 单词查词浮窗 ==========
+const wordPopover = reactive({
+  visible: false,
+  loading: false,
+  word: { word: '', results: [] },
+  position: { x: 20, y: 140 },
+})
+
+function handleCultureWordClick(wordData, event) {
+  event.stopPropagation()
+  wordPopover.word = { word: wordData.word, results: [] }
+  wordPopover.loading = true
+  wordPopover.visible = true
+  lookupCultureWord(wordData.word)
+}
+
+async function lookupCultureWord(word) {
+  const studyPurpose = userStore.user?.studyPurpose || ''
+  const result = await readerStore.lookupWord(word, studyPurpose)
+
+  // 竞态保护
+  if (wordPopover.word.word.toLowerCase() !== word.toLowerCase()) {
+    return
+  }
+
+  if (result.success) {
+    wordPopover.word = {
+      word: result.word,
+      phonetic: result.phonetic || '',
+      results: result.results || [],
+      found: result.found,
+      lemmaFrom: result.lemmaFrom || '',
+      lemmaTo: result.lemmaTo || '',
+    }
+    readerStore.prefetchAIExamples(result.word || word)
+  } else {
+    wordPopover.word = {
+      word,
+      results: [],
+      found: false,
+      error: result.message || '查询失败',
+    }
+  }
+  wordPopover.loading = false
+}
 
 const expandedNotes = ref(new Set())
 const showZh = ref(new Set())
