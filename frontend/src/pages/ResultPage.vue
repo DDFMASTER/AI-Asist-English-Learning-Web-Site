@@ -148,18 +148,36 @@
               Question {{ currentItem.id }}
             </span>
           </div>
-          <div class="flex items-center gap-2">
-            <Icon
-              :icon="currentItem.isCorrect ? 'ph:check-circle-fill' : 'ph:x-circle-fill'"
-              class="text-xl"
-              :class="currentItem.isCorrect ? 'text-green-500' : 'text-red-500'"
-            />
-            <span
-              class="text-sm font-bold"
-              :class="currentItem.isCorrect ? 'text-green-600' : 'text-red-600'"
+          <div class="flex items-center gap-3">
+            <!-- 加入错题本按钮 -->
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-200"
+              :class="isInWrongBookSet(currentItem.id)
+                ? 'bg-amber-50 text-amber-500 border border-amber-200 cursor-default'
+                : 'bg-white border border-gray-200 text-gray-400 hover:text-[#2563EB] hover:border-[#2563EB] hover:shadow-sm cursor-pointer'"
+              :disabled="isInWrongBookSet(currentItem.id)"
+              @click="addCurrentToWrongBook"
+              :title="isInWrongBookSet(currentItem.id) ? '已在错题本中' : '加入错题本'"
             >
-              {{ currentItem.isCorrect ? '回答正确' : '回答错误' }}
-            </span>
+              <Icon
+                :icon="isInWrongBookSet(currentItem.id) ? 'ph:check-bold' : 'ph:plus-bold'"
+                class="text-sm"
+              />
+              {{ isInWrongBookSet(currentItem.id) ? '已加入' : '错题本' }}
+            </button>
+            <div class="flex items-center gap-2">
+              <Icon
+                :icon="currentItem.isCorrect ? 'ph:check-circle-fill' : 'ph:x-circle-fill'"
+                class="text-xl"
+                :class="currentItem.isCorrect ? 'text-green-500' : 'text-red-500'"
+              />
+              <span
+                class="text-sm font-bold"
+                :class="currentItem.isCorrect ? 'text-green-600' : 'text-red-600'"
+              >
+                {{ currentItem.isCorrect ? '回答正确' : '回答错误' }}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -298,6 +316,48 @@ const correctCount = computed(() =>
 const wrongCount = computed(() =>
   questionReview.value.filter(q => !q.isCorrect).length
 )
+
+// ========== 错题本 ==========
+const wrongBookIds = ref(new Set())
+
+/** 加载已在错题本中的题号 */
+async function loadWrongBookIds() {
+  try {
+    const { getAllWrongQuestions } = await import('@/utils/wrongBookDB')
+    const all = await getAllWrongQuestions()
+    wrongBookIds.value = new Set(all.map(q => q.questionId))
+  } catch (e) {
+    console.error('加载错题本失败:', e)
+  }
+}
+
+/** 判断某题是否已在错题本中 */
+function isInWrongBookSet(questionId) {
+  return wrongBookIds.value.has(questionId)
+}
+
+/** 将当前题目加入错题本 */
+async function addCurrentToWrongBook() {
+  const item = currentItem.value
+  if (!item || !item.id) return
+  try {
+    const { addToWrongBook } = await import('@/utils/wrongBookDB')
+    const result = await addToWrongBook({
+      questionId: item.id,
+      passage: item.passage || '',
+      question: item.question || '',
+      options: item.options || [],
+      userAnswer: item.userAnswer || '',
+      correctAnswer: item.correctAnswer || '',
+      explanation: item.explanation || '',
+    })
+    if (result.success) {
+      wrongBookIds.value = new Set([...wrongBookIds.value, item.id])
+    }
+  } catch (e) {
+    console.error('加入错题本失败:', e)
+  }
+}
 
 /** 跳转到指定题号的题目 */
 function goToQuestion(index) {
@@ -476,6 +536,7 @@ function handleResize() {
 onMounted(async () => {
   await nextTick()
   initRadarChart()
+  loadWrongBookIds()
   window.addEventListener('keydown', handleReviewKeydown)
   window.addEventListener('wheel', handleReviewWheel, { passive: true })
 })

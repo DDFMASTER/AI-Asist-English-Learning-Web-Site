@@ -312,12 +312,35 @@ export const useAssessmentStore = defineStore('assessment', () => {
     return level
   }
 
-  /** 保存 CEFR 进度到后端，单次最多+20，返回 { level, nextLevel, leveledUp } */
-  async function saveCefrProgress(score, cefrLevel) {
+  /** 保存 CEFR 进度到后端，单次最多+20，最多升一级，返回 { level, nextLevel, leveledUp } */
+  async function saveCefrProgress(score, aiCefrLevel) {
     const { useUserStore } = await import('@/stores/user')
     const userStore = useUserStore()
     const userId = userStore.user?.userId
     if (!userId) return null
+
+    const vocabBases = { A1: 500, A2: 1500, B1: 3000, B2: 5000, C1: 8000, C2: 12000 }
+    const cefrLabels = { A1: '初级', A2: '初级上', B1: '中级', B2: '中高级', C1: '高级', C2: '精通' }
+
+    // 读取用户当前 CEFR 等级（从本地或后端，而非 AI 返回值）
+    let currentLevel = null
+    try {
+      const raw = localStorage.getItem(`aael_vocab_result_${userId}`)
+      if (raw) {
+        const vocabResult = JSON.parse(raw)
+        if (vocabResult.cefrLevel) currentLevel = vocabResult.cefrLevel.toUpperCase()
+      }
+    } catch (_) {}
+    // 回退：从 literacy 推算 CEFR 等级
+    if (!currentLevel) {
+      const literacy = userStore.user?.literacy || 0
+      if (literacy >= 12000) currentLevel = 'C2'
+      else if (literacy >= 8000) currentLevel = 'C1'
+      else if (literacy >= 5000) currentLevel = 'B2'
+      else if (literacy >= 3000) currentLevel = 'B1'
+      else if (literacy >= 1500) currentLevel = 'A2'
+      else currentLevel = 'A1'
+    }
 
     let currentProgress = 0
     try {
@@ -327,14 +350,13 @@ export const useAssessmentStore = defineStore('assessment', () => {
 
     const increment = Math.min(20, Math.max(5, Math.round(score * 0.2)))
     let newProgress = currentProgress + increment
-    let newLevel = (cefrLevel || 'A1').toUpperCase()
+    let newLevel = currentLevel
     let leveledUp = false
-    const vocabBases = { A1: 500, A2: 1500, B1: 3000, B2: 5000, C1: 8000, C2: 12000 }
-    const cefrLabels = { A1: '初级', A2: '初级上', B1: '中级', B2: '中高级', C1: '高级', C2: '精通' }
 
+    // 进度 >= 100 时晋级（每次最多升一级）
     if (newProgress >= 100) {
       newProgress = newProgress - 100
-      newLevel = getNextLevel(newLevel)
+      newLevel = getNextLevel(currentLevel)
       leveledUp = true
       try {
         const p = new URLSearchParams()
