@@ -28,6 +28,22 @@
             {{ userLevel }}
           </span>
         </div>
+        <!-- CEFR 等级进度条 -->
+        <div class="mt-3 max-w-[250px]">
+          <div class="flex items-center justify-between text-xs text-gray-400 mb-1">
+            <span class="font-bold text-gray-500">{{ cefrCurrentLevel }}</span>
+            <span>{{ cefrProgress }}%</span>
+            <span class="font-bold text-gray-500">{{ cefrNextLevel }}</span>
+          </div>
+          <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-500"
+              :class="cefrBarColor"
+              :style="{ width: cefrProgress + '%' }"
+            ></div>
+          </div>
+        </div>
+
         <div class="flex items-center gap-8 mt-4">
           <div class="text-center">
             <div class="text-xl font-bold">{{ streak }}</div>
@@ -309,7 +325,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Icon } from '@iconify/vue'
 import * as echarts from 'echarts'
 import { useUserStore } from '@/stores/user'
@@ -321,6 +337,7 @@ const gggAudioModules = import.meta.glob('../ggg/*.mp3', { eager: true })
 const gggAudioFiles = Object.values(gggAudioModules).map(m => m.default)
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const taskStore = useTaskStore()
 const { guard } = useRequireAuth()
@@ -416,6 +433,26 @@ const avatarLetter = computed(() => username.value.charAt(0).toUpperCase())
 const streak = ref(0)
 const totalRead = ref(0)
 const totalXp = computed(() => userStore.user?.experience || 0)
+
+// CEFR 进度条
+const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+const cefrProgress = computed(() => userStore.user?.cefrProgress || 0)
+const cefrCurrentLevel = computed(() => {
+  const local = getLocalVocabResult()
+  if (local) return local.cefrLevel || 'A1'
+  return literacyToLevel(userStore.user?.literacy)?.split(' · ')[0] || 'A1'
+})
+const cefrNextLevel = computed(() => {
+  const idx = CEFR_LEVELS.indexOf(cefrCurrentLevel.value)
+  return CEFR_LEVELS[idx + 1] || cefrCurrentLevel.value
+})
+const cefrBarColor = computed(() => {
+  const p = cefrProgress.value
+  if (p >= 90) return 'bg-green-500'
+  if (p >= 60) return 'bg-[#2563EB]'
+  if (p >= 30) return 'bg-yellow-500'
+  return 'bg-gray-300'
+})
 
 // ========== 学习记录（浏览历史）==========
 const historyRecords = ref([])
@@ -708,6 +745,10 @@ async function loadUserStats() {
 }
 
 onMounted(async () => {
+  // 如果从读物匹配「查看全部历史」跳转过来，自动打开学习记录
+  if (route.query.tab === 'records') {
+    activeDrawer.value = 'records'
+  }
   await nextTick()
   userStore.fetchProfile()        // 刷新后端 XP
   loadUserStats()                 // 刷新本地统计

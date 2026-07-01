@@ -479,7 +479,7 @@ function showToast(message, type = 'success') {
 }
 
 // ========== 上传文章弹窗 ==========
-const difficultyOptions = ['初中', '高中', '四级', '六级', '考研', '托福', '期刊', '原著']
+const difficultyOptions = ['初中', '高中', '四级', '六级', '考研', '托福', '期刊', '原著', '网络新闻']
 const fileInput = ref(null)
 const uploadModal = ref({
   show: false,

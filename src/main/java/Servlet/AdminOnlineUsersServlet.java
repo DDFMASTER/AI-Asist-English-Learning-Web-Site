@@ -43,6 +43,22 @@ public class AdminOnlineUsersServlet extends HttpServlet {
         int onlineCount = monitorService.getOnlineCount(ctx);
         List<MonitorService.OnlineUserInfo> onlineUsers = monitorService.getOnlineUsers(ctx);
 
+        // 确保管理员自己出现在列表中（有时 SessionListener 未及时捕获）
+        boolean adminInList = false;
+        for (MonitorService.OnlineUserInfo u : onlineUsers) {
+            if (u.getUserId().equals(adminUserId)) { adminInList = true; break; }
+        }
+        if (!adminInList) {
+            Entities.User adminUser = new DAO.UserDAOImpl().findById(adminUserId);
+            if (adminUser != null) {
+                onlineUsers = new java.util.ArrayList<>(onlineUsers);
+                onlineUsers.add(new MonitorService.OnlineUserInfo(
+                    adminUserId, adminUser.getUsername(), adminUser.getRole(),
+                    adminUser.getStudyPurpose(), "当前会话", 0, 0, false));
+                onlineCount = onlineUsers.size();
+            }
+        }
+
         // 构建 JSON 响应
         StringBuilder json = new StringBuilder();
         json.append("{\"success\":true,");

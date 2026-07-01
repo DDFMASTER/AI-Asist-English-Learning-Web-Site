@@ -260,6 +260,19 @@ export const useAssessmentStore = defineStore('assessment', () => {
         },
       }
 
+      // 计算 CEFR 进度增值并保存到后端
+      let leveledUp = false
+      try {
+        const progressResult = await saveCefrProgress(data.overallScore || 0, data.cefrLevel)
+        if (progressResult) {
+          assessmentResult.value.level = progressResult.level
+          assessmentResult.value.nextLevel = progressResult.nextLevel
+          assessmentResult.value.leveledUp = progressResult.leveledUp
+          leveledUp = progressResult.leveledUp
+        }
+      } catch (_) { /* 非关键 */ }
+      assessmentResult.value.leveledUp = leveledUp
+
       clearProgress()
       return { success: true, result: assessmentResult.value }
     } catch (error) {
@@ -297,6 +310,60 @@ export const useAssessmentStore = defineStore('assessment', () => {
     const idx = levels.indexOf(level)
     if (idx >= 0 && idx < levels.length - 1) return levels[idx + 1]
     return level
+  }
+
+  /** 保存 CEFR 进度到后端，单次最多+20，返回 { level, nextLevel, leveledUp } */
+  async function saveCefrProgress(score, cefrLevel) {
+    const { useUserStore } = await import('@/stores/user')
+    const userStore = useUserStore()
+    const userId = userStore.user?.userId
+    if (!userId) return null
+
+    let currentProgress = 0
+    try {
+      const data = await request.get('/user/cefr-progress', { params: { userId } })
+      if (data.success) currentProgress = data.cefrProgress || 0
+    } catch (_) {}
+
+    const increment = Math.min(20, Math.max(5, Math.round(score * 0.2)))
+    let newProgress = currentProgress + increment
+    let newLevel = (cefrLevel || 'A1').toUpperCase()
+    let leveledUp = false
+    const vocabBases = { A1: 500, A2: 1500, B1: 3000, B2: 5000, C1: 8000, C2: 12000 }
+    const cefrLabels = { A1: '初级', A2: '初级上', B1: '中级', B2: '中高级', C1: '高级', C2: '精通' }
+
+    if (newProgress >= 100) {
+      newProgress = newProgress - 100
+      newLevel = getNextLevel(newLevel)
+      leveledUp = true
+      try {
+        const p = new URLSearchParams()
+        p.append('userId', String(userId))
+        p.append('literacy', String(vocabBases[newLevel] || 3000))
+        await request.post('/user/cefr-progress', p)
+      } catch (_) {}
+    }
+
+    try {
+      const params = new URLSearchParams()
+      params.append('userId', String(userId))
+      params.append('progress', String(newProgress))
+      await request.post('/user/cefr-progress', params)
+    } catch (_) {}
+
+    // 同步本地
+    if (userStore.user) {
+      userStore.user.cefrProgress = newProgress
+      if (vocabBases[newLevel]) userStore.user.literacy = vocabBases[newLevel]
+      localStorage.setItem('user', JSON.stringify(userStore.user))
+    }
+    localStorage.setItem(`aael_vocab_result_${userId}`, JSON.stringify({
+      literacy: vocabBases[newLevel] || userStore.user?.literacy || 3000,
+      cefrLevel: newLevel,
+      cefrLabel: cefrLabels[newLevel] || '中级',
+    }))
+
+    return { level: newLevel, nextLevel: getNextLevel(newLevel), leveledUp }
   }
 
   // ========== 进度持久化 ==========

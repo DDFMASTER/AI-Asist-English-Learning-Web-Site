@@ -148,6 +148,41 @@ public class UserDAOImpl implements UserDAO {
         }
     }
 
+    // ========== CEFR 进度存储（profile 字段存 JSON） ==========
+
+    static int readProgressFromProfile(String profile) {
+        if (profile == null || profile.isBlank()) return 0;
+        try {
+            // profile 存 JSON: {"cefrProgress": 65}
+            int idx = profile.indexOf("\"cefrProgress\"");
+            if (idx < 0) return 0;
+            int colon = profile.indexOf(":", idx);
+            int end = profile.indexOf(",", colon);
+            if (end < 0) end = profile.indexOf("}", colon);
+            if (colon < 0 || end < 0) return 0;
+            return Integer.parseInt(profile.substring(colon + 1, end).trim());
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    static String buildProfileJson(int progress) {
+        return "{\"cefrProgress\":" + progress + "}";
+    }
+
+    @Override
+    public int updateCefrProgress(Long userId, int progress) {
+        String sql = "UPDATE user SET profile = ? WHERE user_id = ?";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, buildProfileJson(progress));
+            ps.setLong(2, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("更新CEFR进度失败: userId=" + userId, e);
+        }
+    }
+
     private User mapRow(ResultSet rs) throws Exception {
         User user = new User();
         user.setUserId(rs.getLong("user_id"));
@@ -160,6 +195,7 @@ public class UserDAOImpl implements UserDAO {
         user.setLiteracy(rs.getInt("literacy"));
         user.setLastLiteracy(toLocalDateTime(rs.getTimestamp("last_literacy")));
         user.setExperience(rs.getInt("experience"));
+        user.setCefrProgress(readProgressFromProfile(rs.getString("profile")));
         user.setLastCheckin(toLocalDateTime(rs.getTimestamp("last_checkin")));
         user.setCreatedAt(toLocalDateTime(rs.getTimestamp("created_at")));
         user.setLastLogin(toLocalDateTime(rs.getTimestamp("last_login")));

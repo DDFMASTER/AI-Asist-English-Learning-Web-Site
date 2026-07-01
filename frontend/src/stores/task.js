@@ -15,7 +15,7 @@ const FIXED_DAILY_TASKS = [
 // ========== 难度 → 分类映射 ==========
 function difficultyToCategory(difficulty) {
   const d = (difficulty || '').trim()
-  if (['TOEFL', '托福', '期刊', '原著'].includes(d)) return 'advanced'
+  if (['TOEFL', '托福', '期刊', '原著', '网络新闻'].includes(d)) return 'advanced'
   if (['CET-4', '四级', 'CET-6', '六级', '考研'].includes(d)) return 'exam'
   if (['初中', '高中', '故事', '日常'].includes(d)) return 'basic'
   return null

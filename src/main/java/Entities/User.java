@@ -69,6 +69,10 @@ public class User {
     public Integer getExperience() { return experience; }
     public void setExperience(Integer experience) { this.experience = experience; }
 
+    private Integer cefrProgress;
+    public Integer getCefrProgress() { return cefrProgress; }
+    public void setCefrProgress(Integer cefrProgress) { this.cefrProgress = cefrProgress; }
+
     public LocalDateTime getLastCheckin() { return lastCheckin; }
     public void setLastCheckin(LocalDateTime lastCheckin) { this.lastCheckin = lastCheckin; }
 

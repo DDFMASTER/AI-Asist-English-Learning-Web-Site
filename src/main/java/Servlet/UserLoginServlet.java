@@ -53,6 +53,7 @@ public class UserLoginServlet extends HttpServlet {
                 + ",\"role\":" + JsonUtil.strVal(user.getRole())
                 + ",\"studyPurpose\":" + JsonUtil.strVal(user.getStudyPurpose())
                 + ",\"experience\":" + JsonUtil.numVal(user.getExperience())
+                + ",\"cefrProgress\":" + JsonUtil.numVal(user.getCefrProgress())
                 + ",\"literacy\":" + JsonUtil.numVal(user.getLiteracy());
 
         response.getWriter().write(JsonUtil.buildResponse(true, "登录成功", extra));

@@ -162,7 +162,8 @@ import { useUserStore } from '@/stores/user'
 import ArticleCard from '@/components/ArticleCard.vue'
 import VocabTestModal from '@/components/VocabTestModal.vue'
 import request from '@/utils/request'
-import { getRecentHistory, relativeTime, getReadArticleIds } from '@/utils/historyDB'
+import { getRecentHistory, relativeTime } from '@/utils/historyDB'
+import { userKey } from '@/utils/storage'
 import { useRequireAuth } from '@/composables/useAuth'
 
 const router = useRouter()
@@ -208,6 +209,21 @@ const loadingArticles = ref(true)
 const historyItems = ref([])
 const readArticleIds = ref(new Set())
 
+/** 从每日任务系统读取已读文章 ID（做完题才算已读） */
+function loadReadIdsFromTask() {
+  try {
+    const raw = localStorage.getItem(userKey('engliai_read_articles_today'))
+    if (!raw) { readArticleIds.value = new Set(); return }
+    const data = JSON.parse(raw)
+    const ids = new Set()
+    const articles = data.articles || {}
+    for (const cat of Object.values(articles)) {
+      for (const id of cat) { ids.add(Number(id)) }
+    }
+    readArticleIds.value = ids
+  } catch { readArticleIds.value = new Set() }
+}
+
 // 用户水平
 const userLevel = computed(() => {
   // 优先本地存储（避免 session 过期拿不到服务端数据）
@@ -231,6 +247,7 @@ const taskProgressPercent = computed(() => {
 const DIFFICULTY_CATEGORY = {
   '期刊': 'advanced',
   '原著': 'advanced',
+  '网络新闻': 'advanced',
   '托福': 'advanced',
   '考研': 'exam',
   '四级': 'exam',
@@ -247,6 +264,7 @@ const DIFFICULTY_CATEGORY = {
 const DIFFICULTY_LABEL = {
   '期刊': '期刊',
   '原著': '原著',
+  '网络新闻': '网络新闻',
   '初中': '初中',
   '高中': '高中',
   '四级': 'CET-4',
@@ -257,12 +275,10 @@ const DIFFICULTY_LABEL = {
   '日常': '日常',
 }
 
-// 按分类过滤文章，同时排除已读文章
+// 按分类展示文章（已在 pickPerCategory 中排除已读）
 const filteredArticles = computed(() => {
   if (articles.value.length === 0) return articles.value
-  return articles.value.filter(a =>
-    a.category === activeCategory.value && !readArticleIds.value.has(Number(a.id))
-  )
+  return articles.value.filter(a => a.category === activeCategory.value)
 })
 
 // 跳转到阅读器
@@ -270,9 +286,9 @@ function goToReader(articleId) {
   router.push(`/reader?id=${articleId}`)
 }
 
-// 加载更多历史
+// 跳转到个人中心学习记录
 function loadMoreHistory() {
-  // TODO: 加载更多或跳转历史页
+  router.push('/profile?tab=records')
 }
 
 /**
@@ -315,11 +331,13 @@ function shuffle(arr) {
 /**
  * 每类随机抽取最多 N 篇
  */
-function pickPerCategory(all, perCategory = 3) {
+function pickPerCategory(all, readIds, perCategory = 3) {
   const groups = { advanced: [], exam: [], basic: [] }
   all.forEach(a => {
     const cat = a.category || 'basic'
-    if (groups[cat]) groups[cat].push(a)
+    if (groups[cat] && !readIds.has(Number(a.id))) {
+      groups[cat].push(a)
+    }
   })
   const picked = []
   for (const cat of ['advanced', 'exam', 'basic']) {
@@ -332,10 +350,22 @@ function pickPerCategory(all, perCategory = 3) {
 async function fetchArticles() {
   loadingArticles.value = true
   try {
+    loadReadIdsFromTask()  // 每次加载文章前刷新已读列表
     const data = await request.get('/article/list')
     if (data.success && Array.isArray(data.articles)) {
+      // 调试：打印所有文章的难度和分类
+      console.table(data.articles.map(a => ({
+        id: a.articleId,
+        title: (a.title || '').substring(0, 30),
+        difficulty: a.difficulty,
+      })))
       const mapped = data.articles.map(mapArticle)
-      articles.value = pickPerCategory(mapped, 3)
+      const byCat = { advanced: [], exam: [], basic: [] }
+      mapped.forEach(a => { if (byCat[a.category]) byCat[a.category].push(a.title) })
+      console.log('按分类:', JSON.stringify(byCat, null, 2))
+      console.log('已读IDs:', [...readArticleIds.value])
+      articles.value = pickPerCategory(mapped, readArticleIds.value, 3)
+      console.log('最终展示:', articles.value.map(a => a.title))
     }
   } catch (err) {
     console.warn('从后端获取文章失败:', err.message)
@@ -364,8 +394,8 @@ async function fetchHistory() {
         title: r.title,
         icon: iconCfg.icon,
         iconColor: iconCfg.color,
-        status: '已读',
-        statusClass: 'text-[10px] text-green-600 font-bold bg-green-50 px-1 rounded',
+        status: '已浏览',
+        statusClass: 'text-[10px] text-gray-500 font-bold bg-gray-50 px-1 rounded',
         time: relativeTime(r.visitedAt),
       }
     })
@@ -394,11 +424,7 @@ onMounted(async () => {
   fetchArticles()
   taskStore.initDailyTasks()
   fetchHistory()
-  // 加载已读文章 ID 用于过滤
-  try {
-    readArticleIds.value = await getReadArticleIds()
-  } catch (e) {
-    console.warn('加载已读文章ID失败:', e)
-  }
+  // 加载已读文章 ID 用于过滤（从每日任务系统读取，只有做完题才算已读）
+  loadReadIdsFromTask()
 })
 </script>

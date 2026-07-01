@@ -62,6 +62,7 @@ public class UserProfileServlet extends HttpServlet {
                 + ",\"role\":" + JsonUtil.strVal(user.getRole())
                 + ",\"studyPurpose\":" + JsonUtil.strVal(user.getStudyPurpose())
                 + ",\"experience\":" + JsonUtil.numVal(user.getExperience())
+                + ",\"cefrProgress\":" + JsonUtil.numVal(user.getCefrProgress())
                 + ",\"literacy\":" + JsonUtil.numVal(user.getLiteracy())
                 + "}";
 

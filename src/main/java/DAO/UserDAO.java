@@ -30,6 +30,13 @@ public interface UserDAO {
      */
     int updateLiteracy(Long userId, int literacy);
 
+    /**
+     * 更新用户 CEFR 等级进度
+     * @param userId  用户ID
+     * @param progress 进度值 0-100
+     */
+    int updateCefrProgress(Long userId, int progress);
+
     // ========== 管理员方法 ==========
 
     /**

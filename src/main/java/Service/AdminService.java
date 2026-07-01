@@ -17,7 +17,7 @@ public class AdminService {
     private final ArticleDAO articleDAO = new ArticleDAOImpl();
     private final AdminActionLogDAO logDAO = new AdminActionLogDAOImpl();
 
-    private static final String[] VALID_STAGES = {"初中", "高中", "四级", "六级", "考研", "托福", "期刊", "原著"};
+    private static final String[] VALID_STAGES = {"初中", "高中", "四级", "六级", "考研", "托福", "期刊", "原著", "网络新闻"};
 
     /**
      * 校验用户是否为管理员

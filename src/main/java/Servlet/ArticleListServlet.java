@@ -21,6 +21,11 @@ public class ArticleListServlet extends HttpServlet {
         response.setContentType("application/json;charset=UTF-8");
 
         String difficulty = request.getParameter("difficulty");
+        String limitStr = request.getParameter("limit");
+        int limit = 100;
+        if (limitStr != null && !limitStr.isBlank()) {
+            try { limit = Integer.parseInt(limitStr); } catch (NumberFormatException ignored) {}
+        }
 
         StringBuilder json = new StringBuilder();
         json.append("{\"success\":true,\"articles\":[");
@@ -35,7 +40,7 @@ public class ArticleListServlet extends HttpServlet {
             if (difficulty != null && !difficulty.isBlank()) {
                 sql += " WHERE difficulty = ?";
             }
-            sql += " ORDER BY article_id DESC LIMIT 20";
+            sql += " ORDER BY article_id DESC LIMIT " + limit;
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 if (difficulty != null && !difficulty.isBlank()) {

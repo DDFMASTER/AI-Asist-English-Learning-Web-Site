@@ -31,16 +31,17 @@
             <Icon icon="ph:party-bold" />
             测评已通过
           </div>
-          <h1 class="text-3xl font-bold mb-4">恭喜！你已成功晋级 {{ result.nextLevel }} 阶段</h1>
+          <h1 v-if="result.leveledUp" class="text-3xl font-bold mb-4">🎉 恭喜！你已成功晋级 {{ result.level }} 阶段</h1>
+          <h1 v-else class="text-3xl font-bold mb-4">测评完成！当前等级 {{ result.level }}</h1>
           <p class="text-gray-500 leading-relaxed mb-8">
-            根据你的答题表现，AI 系统从词汇、语法、阅读理解、文化背景和逻辑分析五个维度评估了你的英语能力。继续加油，下一阶段目标是 {{ result.nextLevel }}！
+            根据你的答题表现，AI 系统从词汇、语法、阅读理解、文化背景和逻辑分析五个维度评估了你的英语能力。{{ result.leveledUp ? '你已升级到新阶段！' : '继续加油，下一阶段目标是 ' + result.nextLevel + '！' }}
           </p>
           <div class="flex items-center gap-4">
             <router-link
-              :to="`/materials?level=${result.nextLevel}`"
+              :to="`/materials`"
               class="px-8 py-3 bg-[#2563EB] text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:scale-105 transition-transform inline-block"
             >
-              开启 {{ result.nextLevel }} 学习之旅
+              {{ result.leveledUp ? '开启 ' + result.level + ' 学习之旅' : '返回读物匹配' }}
             </router-link>
           </div>
         </div>
