@@ -15,6 +15,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
   const assessmentResult = ref(null) // 评估结果，供 ResultPage 使用
   const sessionId = ref('')          // 后台生成的会话 ID，用于轮询
   const totalTarget = ref(10)        // 目标总题数
+  const pollError = ref('')          // 轮询出错信息
   let pollTimer = null               // 轮询定时器
 
   // ========== 计算属性 ==========
@@ -129,18 +130,28 @@ export const useAssessmentStore = defineStore('assessment', () => {
   }
 
   /** 轮询获取后台生成的剩余题目 */
+  let pollStartTime = 0
+  const POLL_TIMEOUT_MS = 180_000  // 3 分钟总超时
+
   function startPolling() {
     stopPolling()
+    pollStartTime = Date.now()
     pollTimer = setInterval(async () => {
       try {
         const data = await request.get('/assessment/questions', {
           params: { sessionId: sessionId.value },
         })
-        if (!data.success) return
+        if (!data.success) {
+          // 会话已过期则停止轮询
+          if (data.message && data.message.includes('过期')) {
+            stopPolling()
+            pollError.value = 'AI 出题会话已过期，请重新开始测评'
+          }
+          return
+        }
 
         const newQuestions = data.questions || []
         if (newQuestions.length > questions.value.length) {
-          // 重新编号（保持连续性）
           questions.value = transformQuestions(newQuestions)
           saveProgress()
         }
@@ -148,10 +159,18 @@ export const useAssessmentStore = defineStore('assessment', () => {
         if (data.complete || questions.value.length >= totalTarget.value) {
           stopPolling()
         }
+
+        // 超时保护
+        if (Date.now() - pollStartTime > POLL_TIMEOUT_MS) {
+          stopPolling()
+          if (questions.value.length < totalTarget.value) {
+            pollError.value = `AI 出题超时（已生成 ${questions.value.length}/${totalTarget.value} 题），请重新测评`
+          }
+        }
       } catch {
         // 轮询失败静默重试
       }
-    }, 3000)  // 每 3 秒轮询一次
+    }, 3000)
   }
 
   function stopPolling() {
@@ -342,6 +361,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
     assessmentResult,
     sessionId,
     totalTarget,
+    pollError,
     allQuestionsReady,
     currentQuestion,
     totalQuestions,

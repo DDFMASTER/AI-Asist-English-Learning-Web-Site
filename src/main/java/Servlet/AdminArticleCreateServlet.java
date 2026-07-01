@@ -16,6 +16,10 @@ import java.io.IOException;
  * Body: adminUserId, title, content, source(选填), difficulty
  */
 @WebServlet("/api/admin/article/create")
+@jakarta.servlet.annotation.MultipartConfig(
+    maxFileSize = 5 * 1024 * 1024,      // 单文件最大 5MB
+    maxRequestSize = 10 * 1024 * 1024    // 整个请求最大 10MB
+)
 public class AdminArticleCreateServlet extends HttpServlet {
     private final AdminService adminService = new AdminService();
 
@@ -25,28 +29,42 @@ public class AdminArticleCreateServlet extends HttpServlet {
         request.setCharacterEncoding("UTF-8");
         response.setContentType("application/json;charset=UTF-8");
 
-        Long adminUserId = parseLong(request.getParameter("adminUserId"));
-        if (!adminService.isAdmin(adminUserId)) {
-            response.getWriter().write(JsonUtil.error("无管理员权限"));
-            return;
+        try {
+            Long adminUserId = parseLong(request.getParameter("adminUserId"));
+            if (!adminService.isAdmin(adminUserId)) {
+                response.getWriter().write(JsonUtil.error("无管理员权限"));
+                return;
+            }
+
+            String title = request.getParameter("title");
+            String content = request.getParameter("content");
+            String source = request.getParameter("source");
+            String difficulty = request.getParameter("difficulty");
+
+            // 诊断日志
+            String ct = request.getContentType();
+            System.out.println("[ArticleCreate] contentType=" + ct
+                + " titleLen=" + (title != null ? title.length() : 0)
+                + " contentLen=" + (content != null ? content.length() : 0)
+                + " source=" + source
+                + " difficulty=" + difficulty);
+
+            String err = adminService.createArticle(title, content, source, difficulty);
+            if (err != null) {
+                response.getWriter().write(JsonUtil.error(err));
+                return;
+            }
+
+            // 记录日志
+            adminService.logAction(adminUserId, "article", 0L,
+                    "create", "title=" + title);
+
+            response.getWriter().write(JsonUtil.success("文章创建成功"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatus(500);
+            response.getWriter().write(JsonUtil.error("服务器错误: " + e.getMessage()));
         }
-
-        String title = request.getParameter("title");
-        String content = request.getParameter("content");
-        String source = request.getParameter("source");
-        String difficulty = request.getParameter("difficulty");
-
-        String err = adminService.createArticle(title, content, source, difficulty);
-        if (err != null) {
-            response.getWriter().write(JsonUtil.error(err));
-            return;
-        }
-
-        // 记录日志
-        adminService.logAction(adminUserId, "article", 0L,
-                "create", "title=" + title);
-
-        response.getWriter().write(JsonUtil.success("文章创建成功"));
     }
 
     private Long parseLong(String s) {

@@ -152,7 +152,7 @@ public class ArticleDAOImpl implements ArticleDAO {
             ps.setString(4, article.getDifficulty());
             return ps.executeUpdate();
         } catch (Exception e) {
-            throw new RuntimeException("新增文章失败", e);
+            throw new RuntimeException("新增文章失败: " + e.getMessage(), e);
         }
     }
 

@@ -113,19 +113,57 @@ public class VocabTestSubmitServlet extends HttpServlet {
             HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
             String respBody = resp.body();
 
-            int levelIdx = respBody.indexOf("\"level\"");
-            if (levelIdx > 0) {
-                int colonIdx = respBody.indexOf(":", levelIdx);
-                int startQuote = respBody.indexOf("\"", colonIdx + 1);
-                int endQuote = respBody.indexOf("\"", startQuote + 1);
-                if (startQuote > 0 && endQuote > startQuote) {
-                    return respBody.substring(startQuote + 1, endQuote);
+            // 从 DeepSeek API 响应中提取 content 字段
+            String content = extractAIContent(respBody);
+            if (content != null) {
+                // 从 content 中提取 level 和 label
+                String level = extractJsonField(content, "level");
+                if (level != null && level.matches("[ABC][12]")) {
+                    return level;
                 }
             }
         } catch (Exception e) {
             System.err.println("[VocabTest] AI 分析失败: " + e.getMessage());
         }
         return fallbackCEFR(estimatedVocab);
+    }
+
+    /** 从 AI API 完整响应中提取 message.content */
+    private String extractAIContent(String respBody) {
+        // DeepSeek 格式: {"choices":[{"message":{"content":"..."}}]}
+        int contentIdx = respBody.indexOf("\"content\"");
+        if (contentIdx < 0) return null;
+        int colonIdx = respBody.indexOf(":", contentIdx);
+        if (colonIdx < 0) return null;
+        int startQuote = respBody.indexOf("\"", colonIdx + 1);
+        if (startQuote < 0) return null;
+        // 找到对应的结束引号（处理转义）
+        StringBuilder sb = new StringBuilder();
+        for (int i = startQuote + 1; i < respBody.length(); i++) {
+            char c = respBody.charAt(i);
+            if (c == '\\' && i + 1 < respBody.length()) {
+                sb.append(respBody.charAt(i + 1));
+                i++;
+            } else if (c == '"') {
+                break;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 从 JSON 字符串中提取指定字段的值 */
+    private String extractJsonField(String json, String field) {
+        int fieldIdx = json.indexOf("\"" + field + "\"");
+        if (fieldIdx < 0) return null;
+        int colonIdx = json.indexOf(":", fieldIdx);
+        if (colonIdx < 0) return null;
+        int startQuote = json.indexOf("\"", colonIdx + 1);
+        if (startQuote < 0) return null;
+        int endQuote = json.indexOf("\"", startQuote + 1);
+        if (endQuote < 0) return null;
+        return json.substring(startQuote + 1, endQuote);
     }
 
     private String fallbackCEFR(int vocab) {

@@ -51,34 +51,44 @@ public class AssessmentGenerateServlet extends HttpServlet {
         }
         SESSIONS.put(sessionId, questions);
 
-        // 2. 后台线程逐道生成剩余 9 道题，每生成一道立即加入题库
+        // 2. 后台线程逐道生成剩余 9 道题，失败自动重试
         final AIService svc = aiService;
         new Thread(() -> {
             try {
                 List<AIService.AssessmentQuestion> list = SESSIONS.get(sessionId);
+                int failures = 0;
                 for (int i = 0; i < 9; i++) {
-                    try {
-                        AIService.AssessmentQuestion q = svc.generateSingleQuestion(sp);
-                        if (q != null && list != null) {
-                            synchronized (list) {
-                                list.add(q);
-                            }
+                    AIService.AssessmentQuestion q = null;
+                    // 每题最多重试 3 次
+                    for (int retry = 0; retry < 3; retry++) {
+                        try {
+                            q = svc.generateSingleQuestion(sp);
+                            if (q != null) break;
+                        } catch (Exception e) {
+                            System.err.println("[Assessment] 第" + (i + 2) + "题生成失败(重试" + (retry + 1) + "/3): " + e.getMessage());
                         }
-                        // 每题之间稍作间隔，避免 API 限流
-                        if (i < 8) Thread.sleep(2000);
-                    } catch (InterruptedException e) {
-                        break;
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        // 单题失败不影响后续生成
+                        if (retry < 2) Thread.sleep(3000);
                     }
+                    if (q != null && list != null) {
+                        synchronized (list) {
+                            list.add(q);
+                        }
+                    } else {
+                        failures++;
+                        System.err.println("[Assessment] 第" + (i + 2) + "题最终生成失败，跳过");
+                    }
+                    if (i < 8) Thread.sleep(2000);
                 }
+                System.out.println("[Assessment] 后台生成完成，成功" + (9 - failures) + "/9 题，sessionId=" + sessionId);
+            } catch (InterruptedException e) {
+                System.out.println("[Assessment] 后台生成被中断，sessionId=" + sessionId);
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
-                // 2 分钟后清理会话
-                try { Thread.sleep(120_000); } catch (InterruptedException ignored) {}
+                // 10 分钟后清理会话（给用户充足的答题时间）
+                try { Thread.sleep(600_000); } catch (InterruptedException ignored) {}
                 SESSIONS.remove(sessionId);
+                System.out.println("[Assessment] 会话清理完成，sessionId=" + sessionId);
             }
         }).start();
 

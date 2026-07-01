@@ -523,13 +523,13 @@ async function submitArticle() {
 
   m.submitting = true
   try {
-    const params = new URLSearchParams()
-    params.append('adminUserId', String(userStore.user?.userId))
-    params.append('title', m.title.trim())
-    params.append('content', m.fileContent)
-    params.append('source', m.source.trim())
-    params.append('difficulty', m.difficulty)
-    const data = await request.post('/admin/article/create', params)
+    const formData = new FormData()
+    formData.append('adminUserId', String(userStore.user?.userId))
+    formData.append('title', m.title.trim())
+    formData.append('content', m.fileContent)
+    formData.append('source', m.source.trim())
+    formData.append('difficulty', m.difficulty)
+    const data = await request.post('/admin/article/create', formData)
     if (data.success) {
       showToast('文章上传成功')
       uploadModal.value.show = false
@@ -539,7 +539,8 @@ async function submitArticle() {
     }
   } catch (e) {
     console.error('上传文章失败:', e)
-    showToast('上传失败，请稍后重试', 'error')
+    const msg = e?.response?.data?.message || e?.message || '上传失败'
+    showToast(msg, 'error')
   } finally {
     m.submitting = false
   }
