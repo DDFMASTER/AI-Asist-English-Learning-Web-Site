@@ -8,7 +8,8 @@
  * 保留最近访问的 50 篇文章。
  */
 
-const DB_NAME = 'AAEL_HistoryDB'
+import { userDBName } from '@/utils/storage'
+
 const DB_VERSION = 1
 const MAX_HISTORY = 50
 
@@ -17,7 +18,7 @@ const MAX_HISTORY = 50
  */
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(userDBName('AAEL_HistoryDB'), DB_VERSION)
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result
@@ -156,6 +157,22 @@ export async function getReadArticleIds() {
     }
     getAll.onerror = () => reject(getAll.error)
     tx.oncomplete = () => db.close()
+  })
+}
+
+/**
+ * 从浏览历史中删除指定文章
+ * @param {number|string} articleId
+ */
+export async function removeFromHistory(articleId) {
+  if (!articleId) return
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('browseHistory', 'readwrite')
+    const store = tx.objectStore('browseHistory')
+    store.delete(Number(articleId))
+    tx.oncomplete = () => { db.close(); resolve() }
+    tx.onerror = () => reject(tx.error)
   })
 }
 

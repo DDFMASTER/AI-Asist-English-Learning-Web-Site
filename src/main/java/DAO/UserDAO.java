@@ -23,6 +23,13 @@ public interface UserDAO {
      */
     int updateExperience(Long userId, int experience);
 
+    /**
+     * 更新用户词汇量
+     * @param userId  用户ID
+     * @param literacy 词汇量
+     */
+    int updateLiteracy(Long userId, int literacy);
+
     // ========== 管理员方法 ==========
 
     /**

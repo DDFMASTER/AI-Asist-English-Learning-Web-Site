@@ -45,7 +45,9 @@ public class LoginFilter implements Filter {
             "/api/article/translate-paragraph",
             "/api/article/quiz",
             "/api/article/cultural-notes",
-            "/api/assessment/"
+            "/api/assessment/",
+            "/api/admin/",
+            "/api/vocabtest/"
     };
 
     @Override

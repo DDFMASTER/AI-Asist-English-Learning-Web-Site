@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import request from '@/utils/request'
+import { userKey } from '@/utils/storage'
 
-const PROGRESS_KEY = 'assessment_progress'
+const getProgressKey = () => userKey('assessment_progress')
 
 export const useAssessmentStore = defineStore('assessment', () => {
   // ========== 状态 ==========
@@ -290,7 +291,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
         sessionId: sessionId.value,
         totalTarget: totalTarget.value,
       }
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify(data))
+      localStorage.setItem(getProgressKey(), JSON.stringify(data))
     } catch {
       // localStorage 不可用时静默失败
     }
@@ -298,7 +299,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
 
   function loadProgress() {
     try {
-      const raw = localStorage.getItem(PROGRESS_KEY)
+      const raw = localStorage.getItem(getProgressKey())
       if (!raw) return null
       const data = JSON.parse(raw)
       if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
@@ -312,7 +313,7 @@ export const useAssessmentStore = defineStore('assessment', () => {
 
   function clearProgress() {
     try {
-      localStorage.removeItem(PROGRESS_KEY)
+      localStorage.removeItem(getProgressKey())
     } catch {
       // 静默失败
     }

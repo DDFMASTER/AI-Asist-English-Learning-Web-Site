@@ -6,7 +6,8 @@
  *      { date: string, minutes: number }
  */
 
-const DB_NAME = 'AAEL_OnlineTimeDB'
+import { userDBName, userKey } from '@/utils/storage'
+
 const DB_VERSION = 1
 
 function getTodayKey() {
@@ -22,7 +23,7 @@ function daysAgoKey(n) {
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(userDBName('AAEL_OnlineTimeDB'), DB_VERSION)
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result
@@ -142,7 +143,7 @@ export async function getStreak() {
 
 // ========== 每日学习目标（localStorage）==========
 
-const TARGET_KEY = 'aael_daily_target_minutes'
+const getTargetKey = () => userKey('aael_daily_target_minutes')
 const DEFAULT_TARGET = 30
 
 /**
@@ -150,7 +151,7 @@ const DEFAULT_TARGET = 30
  */
 export function getDailyTarget() {
   try {
-    const val = localStorage.getItem(TARGET_KEY)
+    const val = localStorage.getItem(getTargetKey())
     if (val !== null) {
       const num = parseInt(val, 10)
       if (!isNaN(num) && num > 0) return num
@@ -164,6 +165,6 @@ export function getDailyTarget() {
  */
 export function setDailyTarget(minutes) {
   try {
-    localStorage.setItem(TARGET_KEY, String(minutes))
+    localStorage.setItem(getTargetKey(), String(minutes))
   } catch (_) { /* ignore */ }
 }

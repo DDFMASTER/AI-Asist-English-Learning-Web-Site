@@ -17,6 +17,14 @@
         <router-link to="/assessment" class="nav-link text-gray-500" active-class="nav-active">
           测评中心
         </router-link>
+        <router-link
+          v-if="userStore.user?.role === 'admin'"
+          to="/admin"
+          class="nav-link text-gray-500"
+          active-class="nav-active"
+        >
+          管理
+        </router-link>
       </div>
 
       <!-- 中间：搜索框 -->

@@ -565,6 +565,7 @@ function onBackToSummary() {
 
 // ========== 答题完成 → 记录文章已读 ==========
 let fallbackReadTimer = null
+let absoluteFallbackTimer = null  // 绝对兜底：60s 后无论如何都记录
 let articleReadRecorded = false
 
 function recordArticleReadOnce() {
@@ -573,6 +574,10 @@ function recordArticleReadOnce() {
   if (fallbackReadTimer) {
     clearTimeout(fallbackReadTimer)
     fallbackReadTimer = null
+  }
+  if (absoluteFallbackTimer) {
+    clearTimeout(absoluteFallbackTimer)
+    absoluteFallbackTimer = null
   }
   const articleId = readerStore.article?.id
   const difficulty = readerStore.article?.difficulty
@@ -585,22 +590,39 @@ function onQuizCompleted() {
   recordArticleReadOnce()
 }
 
-/** 兜底：如果 AI 出题失败/无题目，5秒后自动标记为已读 */
+/** 重置当前文章的已读状态（切换文章时调用） */
+function resetReadState() {
+  articleReadRecorded = false
+  if (fallbackReadTimer) {
+    clearTimeout(fallbackReadTimer)
+    fallbackReadTimer = null
+  }
+  if (absoluteFallbackTimer) {
+    clearTimeout(absoluteFallbackTimer)
+    absoluteFallbackTimer = null
+  }
+}
+
+/** 兜底计时：确保文章最终一定会被记录为已读 */
 function scheduleFallbackReadRecord(articleId) {
+  // 5秒后检查：如果 quiz 无题目或仍在加载，记录已读
   fallbackReadTimer = setTimeout(() => {
-    // 检查 quiz 是否确实没有题目（加载失败/无题目）
     const quiz = readerStore.quizCache
     if (quiz && !quiz.loading && (!quiz.questions || quiz.questions.length === 0)) {
       recordArticleReadOnce()
-    }
-    // 如果 quiz 仍在 loading，再等 10 秒
-    else if (quiz && quiz.loading) {
+    } else if (quiz && quiz.loading) {
+      // 仍在加载，再等 10 秒
       fallbackReadTimer = setTimeout(() => {
         recordArticleReadOnce()
       }, 10000)
     }
-    // 有题目的情况由 onQuizCompleted 处理，这里不做任何事
+    // 有题目的情况由 onQuizCompleted 处理，但设置绝对兜底以防用户不答题
   }, 5000)
+
+  // 绝对兜底：60秒后无论如何都标记为已读（防止题目加载了但用户不回答）
+  absoluteFallbackTimer = setTimeout(() => {
+    recordArticleReadOnce()
+  }, 60000)
 }
 
 // ========== 全局点击关闭浮窗 ==========
@@ -631,8 +653,9 @@ watch(() => readerStore.showTranslation, (newVal) => {
   }
 })
 
-onMounted(async () => {
-  const articleId = route.query.id
+/** 初始化当前文章的阅读追踪 */
+async function initArticle(articleId) {
+  resetReadState()
   await readerStore.fetchArticle(articleId)
   if (articleId && readerStore.article?.title) {
     // 记录浏览历史到 IndexedDB
@@ -648,15 +671,25 @@ onMounted(async () => {
 
     // 初始化每日任务，阅读完成标记延迟到答题完成后
     taskStore.initDailyTasks()
-    // 如果文章没有 quiz 题目（AI 生成失败等），延迟 5 秒后自动标记为已读
     scheduleFallbackReadRecord(articleId)
   }
+}
+
+onMounted(async () => {
+  await initArticle(route.query.id)
   document.addEventListener('click', handleGlobalClick)
   window.addEventListener('scroll', handleScroll)
 })
 
+// 监听文章切换（同一路由不同 query 参数）
+watch(() => route.query.id, (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    initArticle(newId)
+  }
+})
+
 onUnmounted(() => {
-  if (fallbackReadTimer) clearTimeout(fallbackReadTimer)
+  resetReadState()
   document.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('scroll', handleScroll)
 })

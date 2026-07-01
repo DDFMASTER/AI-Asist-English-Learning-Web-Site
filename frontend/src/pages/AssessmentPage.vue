@@ -267,7 +267,7 @@ async function handleNext() {
       // 测评完成后同步最新用户数据（经验值等）
       userStore.fetchProfile()
       // 标记今日"完成一次测试"任务并发放经验
-      taskStore.completeAssessmentTask()
+      await taskStore.completeAssessmentTask()
       router.push('/result')
     } else if (result && !result.success) {
       error.value = result.error || '评估失败，请稍后重试'

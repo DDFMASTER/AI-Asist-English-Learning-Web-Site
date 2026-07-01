@@ -8,13 +8,14 @@
  * 与 onlineTimeDB / historyDB 保持一致的 API 风格。
  */
 
-const DB_NAME = 'AAEL_VocabDB'
+import { userDBName } from '@/utils/storage'
+
 const DB_VERSION = 1
 const MAX_WORDS = 200
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(userDBName('AAEL_VocabDB'), DB_VERSION)
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result

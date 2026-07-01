@@ -55,6 +55,56 @@ public class ArticleDAOImpl implements ArticleDAO {
     // ========== 管理员方法 ==========
 
     @Override
+    public List<Article> findAllPaginated(int offset, int limit) {
+        List<Article> articles = new ArrayList<>();
+        String sql = "SELECT article_id, title, source, difficulty, article_like_count, " +
+                     "explanation_like_count, explanation_dislike_count, " +
+                     "vocquiz_num, comquiz_num " +
+                     "FROM article ORDER BY article_id DESC LIMIT ? OFFSET ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, limit);
+            ps.setInt(2, offset);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Article article = new Article();
+                    article.setArticleId(rs.getLong("article_id"));
+                    article.setTitle(rs.getString("title"));
+                    article.setSource(rs.getString("source"));
+                    article.setDifficulty(rs.getString("difficulty"));
+                    article.setArticleLikeCount(rs.getInt("article_like_count"));
+                    article.setExplanationLikeCount(rs.getInt("explanation_like_count"));
+                    article.setExplanationDislikeCount(rs.getInt("explanation_dislike_count"));
+                    article.setVocquizNum(rs.getInt("vocquiz_num"));
+                    article.setComquizNum(rs.getInt("comquiz_num"));
+                    articles.add(article);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("分页查询文章列表失败", e);
+        }
+        return articles;
+    }
+
+    @Override
+    public int countAll() {
+        String sql = "SELECT COUNT(*) FROM article";
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("查询文章总数失败", e);
+        }
+        return 0;
+    }
+
+    @Override
     public Article findById(Long articleId) {
         String sql = "SELECT article_id, title, content, source, difficulty, " +
                      "article_like_count, explanation, explanation_like_count, " +

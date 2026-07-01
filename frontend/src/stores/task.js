@@ -21,9 +21,12 @@ function difficultyToCategory(difficulty) {
   return null
 }
 
-// ========== localStorage 读写（当日已读文章追踪） ==========
-const STORAGE_KEY = 'engliai_read_articles_today'
-const XP_SYNCED_KEY = 'engliai_xp_synced_today'
+// ========== localStorage 读写（当日已读文章追踪，按用户隔离） ==========
+import { userKey } from '@/utils/storage'
+
+function getStorageKey() { return userKey('engliai_read_articles_today') }
+function getXpSyncedKey() { return userKey('engliai_xp_synced_today') }
+function getPendingXpKey() { return userKey('engliai_pending_xp') }  // 待同步经验值队列（登录后自动补发）
 
 function todayKey() {
   const now = new Date()
@@ -32,9 +35,8 @@ function todayKey() {
 
 function loadReadArticles() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(getStorageKey())
     const data = raw ? JSON.parse(raw) : {}
-    // 如果不是今天的记录，重置
     if (data.date !== todayKey()) {
       return { date: todayKey(), articles: {} }
     }
@@ -45,13 +47,36 @@ function loadReadArticles() {
 }
 
 function saveReadArticles(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  localStorage.setItem(getStorageKey(), JSON.stringify(data))
+}
+
+/** 待同步经验值队列：保存到 localStorage，登录后自动补发 */
+function savePendingXp(deltaXp) {
+  try {
+    const raw = localStorage.getItem(getPendingXpKey())
+    const queue = raw ? JSON.parse(raw) : []
+    queue.push({ deltaXp, time: Date.now() })
+    localStorage.setItem(getPendingXpKey(), JSON.stringify(queue))
+  } catch (_) { /* ignore */ }
+}
+
+function loadPendingXp() {
+  try {
+    const raw = localStorage.getItem(getPendingXpKey())
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function clearPendingXp() {
+  localStorage.removeItem(getPendingXpKey())
 }
 
 /** 获取今日已同步过经验的每日任务ID列表 */
 function loadXpSyncedTasks() {
   try {
-    const raw = localStorage.getItem(XP_SYNCED_KEY)
+    const raw = localStorage.getItem(getXpSyncedKey())
     const data = raw ? JSON.parse(raw) : {}
     if (data.date !== todayKey()) {
       return { date: todayKey(), synced: [] }
@@ -67,7 +92,17 @@ function saveXpSyncedTask(taskId) {
   const data = loadXpSyncedTasks()
   if (!data.synced.includes(taskId)) {
     data.synced.push(taskId)
-    localStorage.setItem(XP_SYNCED_KEY, JSON.stringify(data))
+    localStorage.setItem(getXpSyncedKey(), JSON.stringify(data))
+  }
+}
+
+/** 移除某个每日任务的经验同步记录（API 调用失败时回滚用） */
+function removeXpSyncedTask(taskId) {
+  const data = loadXpSyncedTasks()
+  const idx = data.synced.indexOf(taskId)
+  if (idx !== -1) {
+    data.synced.splice(idx, 1)
+    localStorage.setItem(getXpSyncedKey(), JSON.stringify(data))
   }
 }
 
@@ -106,12 +141,21 @@ export const useTaskStore = defineStore('task', () => {
 
     // 恢复今日已有的完成状态（只恢复 done 状态，不重复发放经验）
     restoreTaskDoneState(syncedIds)
+
+    // 自动补发队列中待同步的经验值（登录/session 恢复后）
+    const userStore = useUserStore()
+    if (userStore.isLoggedIn && userStore.user?.userId) {
+      flushPendingXpInternal(userStore)
+    }
   }
 
   /** 根据已读文章和已同步经验记录恢复任务打勾状态，但不重复发放经验 */
   function restoreTaskDoneState(syncedIds) {
     for (const task of todayTasks.value) {
       if (!task.requiredCategory || task.requiredCount <= 0) continue
+
+      // 只有经验已成功同步到后端的任务才恢复为完成状态
+      if (!syncedIds.includes(task.id)) continue
 
       const articles = readArticlesData.value.articles || {}
       const readCount = (articles[task.requiredCategory] || []).length
@@ -131,18 +175,26 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   /** 切换任务完成状态（手动勾选/取消） */
-  function toggleTask(taskId) {
+  async function toggleTask(taskId) {
     const task = todayTasks.value.find(t => t.id === taskId)
     if (!task) return
 
     task.done = !task.done
     if (task.done) {
+      // 乐观更新：先标记完成，再同步后端
       xpEarned.value += task.xp
       saveXpSyncedTask(taskId)
-      syncXp(task.xp)
+      const ok = await syncXp(task.xp)
+      if (!ok) {
+        // 同步失败，回滚
+        xpEarned.value = Math.max(0, xpEarned.value - task.xp)
+        task.done = false
+        removeXpSyncedTask(taskId)
+      }
     } else {
       xpEarned.value = Math.max(0, xpEarned.value - task.xp)
-      syncXp(-task.xp)
+      removeXpSyncedTask(taskId)
+      await syncXp(-task.xp)
     }
   }
 
@@ -179,10 +231,11 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   /** 根据已读文章数量重新检查所有自动任务 */
-  function recheckAllTasks() {
+  async function recheckAllTasks() {
     const xpSyncedData = loadXpSyncedTasks()
     const syncedIds = xpSyncedData.synced || []
     let xpChanged = 0
+    const newlyCompletedIds = []
 
     for (const task of todayTasks.value) {
       if (!task.requiredCategory || task.requiredCount <= 0) continue
@@ -194,32 +247,103 @@ export const useTaskStore = defineStore('task', () => {
       if (readCount >= task.requiredCount) {
         task.done = true
 
-        // 检查今日是否已经为该任务发放过经验（防止页面刷新后重复发放）
         if (!syncedIds.includes(task.id)) {
           xpEarned.value += task.xp
           xpChanged += task.xp
+          newlyCompletedIds.push(task.id)
+          // 乐观更新：先记录已同步，再调 API
           saveXpSyncedTask(task.id)
         }
       }
     }
 
     if (xpChanged > 0) {
-      syncXp(xpChanged)
+      const ok = await syncXp(xpChanged)
+      if (ok) {
+        // 同步成功，刷新用户信息以更新显示的 XP
+        try {
+          const userStore = useUserStore()
+          await userStore.fetchProfile()
+        } catch (_) { /* 非关键，静默失败 */ }
+      } else {
+        // 同步失败，回滚所有本次完成的任务
+        for (const task of todayTasks.value) {
+          if (newlyCompletedIds.includes(task.id)) {
+            task.done = false
+            xpEarned.value = Math.max(0, xpEarned.value - task.xp)
+            removeXpSyncedTask(task.id)
+          }
+        }
+      }
     }
   }
 
-  /** 同步经验值到后端 */
+  /**
+   * 同步经验值到后端（含待同步队列自动补发）
+   * @param {number} deltaXp — 经验值变动量（正数增加，负数扣减）
+   * @returns {Promise<boolean|string>}
+   *   - true: 同步成功
+   *   - false: 同步失败（网络/服务器错误），应回滚
+   *   - 'unauth': 未登录/session 过期，保留本地状态，自动入队等待补发
+   */
   async function syncXp(deltaXp) {
     const userStore = useUserStore()
-    if (!userStore.isLoggedIn || !userStore.user?.userId) return
+    if (!userStore.isLoggedIn || !userStore.user?.userId) {
+      console.warn('[Task] 无法同步经验值：用户未登录或无 userId')
+      savePendingXp(deltaXp)
+      return 'unauth'
+    }
 
     try {
+      // 先尝试补发队列中待同步的经验值
+      await flushPendingXpInternal(userStore)
+
       const params = new URLSearchParams()
       params.append('userId', String(userStore.user.userId))
       params.append('xp', String(deltaXp))
       await request.post('/user/experience', params)
+      return true
     } catch (error) {
+      if (error.response?.status === 401) {
+        console.warn('[Task] 同步经验值需要登录，已暂存待补发')
+        savePendingXp(deltaXp)
+        return 'unauth'
+      }
       console.error('[Task] 同步经验值失败:', error)
+      return false
+    }
+  }
+
+  /** 补发队列中所有待同步的经验值（内部方法，不暴露） */
+  async function flushPendingXpInternal(userStore) {
+    const queue = loadPendingXp()
+    if (queue.length === 0) return
+
+    let totalXp = 0
+    for (const item of queue) {
+      totalXp += item.deltaXp
+    }
+    if (totalXp === 0) {
+      clearPendingXp()
+      return
+    }
+
+    try {
+      const params = new URLSearchParams()
+      params.append('userId', String(userStore.user.userId))
+      params.append('xp', String(totalXp))
+      await request.post('/user/experience', params)
+      clearPendingXp()
+      console.log(`[Task] 已补发待同步经验值: +${totalXp}（${queue.length} 笔）`)
+      // 刷新用户信息
+      try { await userStore.fetchProfile() } catch (_) { /* ignore */ }
+    } catch (error) {
+      if (error.response?.status === 401) {
+        // 仍未登录，保留队列
+        return
+      }
+      // 其他错误也保留队列，下次重试
+      console.warn('[Task] 补发经验值失败，将重试:', error)
     }
   }
 
@@ -248,11 +372,18 @@ export const useTaskStore = defineStore('task', () => {
       return
     }
 
-    // 标记完成 + 发放经验
+    // 乐观更新：先标记完成并记录已同步，再调 API
     task.done = true
     xpEarned.value += task.xp
     saveXpSyncedTask(ASSESSMENT_TASK_ID)
-    await syncXp(task.xp)
+    const ok = await syncXp(task.xp)
+    if (!ok) {
+      // 同步失败，回滚本地状态以便重试
+      task.done = false
+      xpEarned.value = Math.max(0, xpEarned.value - task.xp)
+      removeXpSyncedTask(ASSESSMENT_TASK_ID)
+      return
+    }
 
     // 同步后刷新用户信息
     const { useUserStore } = await import('@/stores/user')
@@ -279,10 +410,18 @@ export const useTaskStore = defineStore('task', () => {
       return
     }
 
+    // 乐观更新：先标记完成并记录已同步，再调 API
     task.done = true
     xpEarned.value += task.xp
     saveXpSyncedTask(VOCAB_TASK_ID)
-    await syncXp(task.xp)
+    const ok = await syncXp(task.xp)
+    if (!ok) {
+      // 同步失败，回滚本地状态以便重试
+      task.done = false
+      xpEarned.value = Math.max(0, xpEarned.value - task.xp)
+      removeXpSyncedTask(VOCAB_TASK_ID)
+      return
+    }
 
     const { useUserStore } = await import('@/stores/user')
     useUserStore().fetchProfile()

@@ -22,6 +22,20 @@ public interface ArticleDAO {
     Article findById(Long articleId);
 
     /**
+     * 分页查询文章列表（不含 content，按 article_id 倒序）
+     * @param offset 偏移量
+     * @param limit  每页条数
+     * @return 文章列表
+     */
+    List<Article> findAllPaginated(int offset, int limit);
+
+    /**
+     * 查询文章总数
+     * @return 文章总数
+     */
+    int countAll();
+
+    /**
      * 新增文章
      * @param article 文章对象（title, content, source, difficulty）
      * @return 影响行数

@@ -390,7 +390,28 @@ function selectAvatar(avatar) {
 // ========== 用户信息 ==========
 const showEditProfile = ref(false)
 const username = computed(() => userStore.user?.username || 'Alex')
-const userLevel = computed(() => userStore.user?.study_purpose || 'B1 · 中级')
+function literacyToLevel(literacy) {
+  if (!literacy || literacy === 0) return null
+  if (literacy < 1500) return 'A1 · 初级'
+  if (literacy < 3000) return 'A2 · 初级上'
+  if (literacy < 5000) return 'B1 · 中级'
+  if (literacy < 8000) return 'B2 · 中高级'
+  if (literacy < 12000) return 'C1 · 高级'
+  return 'C2 · 精通'
+}
+function getLocalVocabResult() {
+  try {
+    const uid = userStore.user?.userId
+    if (!uid) return null
+    const raw = localStorage.getItem(`aael_vocab_result_${uid}`)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+const userLevel = computed(() => {
+  const local = getLocalVocabResult()
+  if (local) return `${local.cefrLevel} · ${local.cefrLabel}`
+  return literacyToLevel(userStore.user?.literacy) || userStore.user?.study_purpose || 'B1 · 中级'
+})
 const avatarLetter = computed(() => username.value.charAt(0).toUpperCase())
 const streak = ref(0)
 const totalRead = ref(0)

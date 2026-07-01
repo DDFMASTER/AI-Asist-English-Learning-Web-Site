@@ -146,6 +146,11 @@
     </div>
   </main>
 
+  <!-- 词汇量测试弹窗（literacy === 0 时自动弹出） -->
+  <VocabTestModal
+    :visible="showVocabTest"
+    @done="onVocabTestDone"
+  />
 </template>
 
 <script setup>
@@ -155,6 +160,7 @@ import { Icon } from '@iconify/vue'
 import { useTaskStore } from '@/stores/task'
 import { useUserStore } from '@/stores/user'
 import ArticleCard from '@/components/ArticleCard.vue'
+import VocabTestModal from '@/components/VocabTestModal.vue'
 import request from '@/utils/request'
 import { getRecentHistory, relativeTime, getReadArticleIds } from '@/utils/historyDB'
 import { useRequireAuth } from '@/composables/useAuth'
@@ -163,6 +169,30 @@ const router = useRouter()
 const taskStore = useTaskStore()
 const userStore = useUserStore()
 const { guard } = useRequireAuth()
+
+// 词汇量测试弹窗
+const showVocabTest = ref(false)
+
+// CEFR 等级 → 中文标签映射
+function literacyToLevel(literacy) {
+  if (!literacy || literacy === 0) return null
+  if (literacy < 1500) return 'A1 · 初级'
+  if (literacy < 3000) return 'A2 · 初级上'
+  if (literacy < 5000) return 'B1 · 中级'
+  if (literacy < 8000) return 'B2 · 中高级'
+  if (literacy < 12000) return 'C1 · 高级'
+  return 'C2 · 精通'
+}
+
+// 从本地读取词汇量测试结果（按用户 ID 隔离）
+function getLocalVocabResult() {
+  try {
+    const uid = userStore.user?.userId
+    if (!uid) return null
+    const raw = localStorage.getItem(`aael_vocab_result_${uid}`)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
 
 // Tab 状态
 const tabs = [
@@ -180,7 +210,10 @@ const readArticleIds = ref(new Set())
 
 // 用户水平
 const userLevel = computed(() => {
-  return userStore.user?.study_purpose || 'B1 · 中级'
+  // 优先本地存储（避免 session 过期拿不到服务端数据）
+  const local = getLocalVocabResult()
+  if (local) return `${local.cefrLevel} · ${local.cefrLabel}`
+  return literacyToLevel(userStore.user?.literacy) || 'B1 · 中级'
 })
 
 // Task 进度
@@ -342,7 +375,21 @@ async function fetchHistory() {
   }
 }
 
+function onVocabTestDone(result) {
+  showVocabTest.value = false
+  // 刷新用户信息以更新 literacy 和等级显示
+  userStore.fetchProfile()
+}
+
 onMounted(async () => {
+  // 检查是否需要弹出词汇量测试
+  const local = getLocalVocabResult()
+  const lit = userStore.user?.literacy
+  // 本地已有结果 或 服务端 literacy > 0 → 跳过
+  if (!local && (lit == null || lit === 0)) {
+    showVocabTest.value = true
+  }
+
   // 所有数据并行加载，不阻塞页面渲染
   fetchArticles()
   taskStore.initDailyTasks()

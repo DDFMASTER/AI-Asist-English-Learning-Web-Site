@@ -37,6 +37,12 @@ const routes = [
     component: () => import('@/pages/ReaderPage.vue'),
     meta: { title: 'AI 沉浸式阅读器', requiresAuth: true }
   },
+  {
+    path: '/admin',
+    name: 'Admin',
+    component: () => import('@/pages/AdminPage.vue'),
+    meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true }
+  },
   // 兜底：未匹配路由重定向到登录页
   { path: '/:pathMatch(.*)*', redirect: '/login' },
 ]
@@ -51,10 +57,23 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   const requiresAuth = to.meta.requiresAuth
   const isGuest = to.meta.guest
+  const requiresAdmin = to.meta.requiresAdmin
 
   if (requiresAuth && !token) {
-    // 未登录，跳转到登录页，并记录原本要去的页面
     next({ path: '/login', query: { redirect: to.fullPath } })
+  } else if (requiresAdmin) {
+    // 检查用户角色是否为 admin
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      if (user.role !== 'admin') {
+        next('/materials')
+        return
+      }
+    } catch (_) {
+      next('/materials')
+      return
+    }
+    next()
   } else if (isGuest && token) {
     // 已登录用户访问登录页，重定向到读物匹配
     next('/materials')

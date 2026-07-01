@@ -133,6 +133,21 @@ public class UserDAOImpl implements UserDAO {
         }
     }
 
+    @Override
+    public int updateLiteracy(Long userId, int literacy) {
+        String sql = "UPDATE user SET literacy = ? WHERE user_id = ?";
+
+        try (Connection conn = DBUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, literacy);
+            ps.setLong(2, userId);
+            return ps.executeUpdate();
+        } catch (Exception e) {
+            throw new RuntimeException("更新用户词汇量失败: userId=" + userId, e);
+        }
+    }
+
     private User mapRow(ResultSet rs) throws Exception {
         User user = new User();
         user.setUserId(rs.getLong("user_id"));
